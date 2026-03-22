@@ -59,15 +59,15 @@ export class WorldGenerator {
     let localWaterLevel = WATER_LEVEL;
     let hasWaterBasin = false;
 
-    if (lakeMask > 0.8) {
-      const t = (lakeMask - 0.8) / 0.2;
+    if (lakeMask > 0.82) {
+      const t = (lakeMask - 0.82) / 0.18;
       basinDepth += 3 + t * 8;
       localWaterLevel = WATER_LEVEL + t * 1.8;
       hasWaterBasin = true;
     }
 
-    if (puddleMask > 0.95) {
-      const t = (puddleMask - 0.95) / 0.05;
+    if (puddleMask > 0.97) {
+      const t = (puddleMask - 0.97) / 0.03;
       basinDepth += 0.8 + t * 1.8;
       localWaterLevel = Math.max(localWaterLevel, WATER_LEVEL - 1 + t * 1.2);
       hasWaterBasin = true;
@@ -84,6 +84,7 @@ export class WorldGenerator {
       surfaceY,
       waterLevel: localWaterLevel,
       hasWaterBasin,
+      basinDepth,
       moisture,
       temperature,
     };
@@ -109,6 +110,7 @@ export class WorldGenerator {
           terrain.surfaceY,
           terrain.waterLevel,
           terrain.hasWaterBasin,
+          terrain.basinDepth,
           terrain.moisture,
           terrain.temperature
         );
@@ -150,7 +152,19 @@ export class WorldGenerator {
     return BLOCK.GRASS;
   }
 
-  fillTerrainColumn(chunk, lx, lz, wx, wz, surfaceY, localWaterLevel, hasWaterBasin, moisture, temperature) {
+  fillTerrainColumn(
+    chunk,
+    lx,
+    lz,
+    wx,
+    wz,
+    surfaceY,
+    localWaterLevel,
+    hasWaterBasin,
+    basinDepth,
+    moisture,
+    temperature
+  ) {
     chunk.set(lx, 0, lz, BLOCK.BEDROCK);
 
     const topBlock = this.getSurfaceBlock(surfaceY, localWaterLevel, hasWaterBasin, moisture, temperature);
@@ -168,8 +182,10 @@ export class WorldGenerator {
       chunk.set(lx, y, lz, blockId);
     }
 
-    // Water is limited to terrain basins and very low natural depressions.
-    const shouldFillWater = hasWaterBasin || surfaceY <= WATER_LEVEL - 2;
+    // Water is limited to real carved basins and very deep lowlands only.
+    const hasStableBasin = hasWaterBasin && basinDepth > 1.05 && surfaceY + 1 <= localWaterLevel;
+    const deepLowland = surfaceY <= WATER_LEVEL - 3;
+    const shouldFillWater = hasStableBasin || deepLowland;
 
     if (shouldFillWater && surfaceY < localWaterLevel) {
       for (let y = surfaceY + 1; y <= localWaterLevel; y += 1) {

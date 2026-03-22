@@ -1,5 +1,5 @@
 import * as THREE from "three";
-import { FOG_FAR, FOG_NEAR, SKY_COLOR } from "../utils/constants.js";
+import { FOG_FAR, FOG_NEAR, RENDER_PIXEL_RATIO_MAX, SKY_COLOR } from "../utils/constants.js";
 
 export function createRenderer(canvas) {
   const renderer = new THREE.WebGLRenderer({
@@ -8,7 +8,7 @@ export function createRenderer(canvas) {
     powerPreference: "high-performance",
   });
   renderer.outputColorSpace = THREE.SRGBColorSpace;
-  renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+  renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, RENDER_PIXEL_RATIO_MAX));
   renderer.setSize(window.innerWidth, window.innerHeight, false);
   renderer.sortObjects = true;
 

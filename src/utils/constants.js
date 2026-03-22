@@ -4,10 +4,10 @@ export const CHUNK_SIZE_Z = 16;
 export const CHUNK_VOLUME = CHUNK_SIZE_X * CHUNK_SIZE_Y * CHUNK_SIZE_Z;
 
 export const WORLD_SEED = 1337;
-export const WORLD_RENDER_RADIUS = 5;
+export const WORLD_RENDER_RADIUS = 4;
 export const WORLD_UNLOAD_RADIUS = WORLD_RENDER_RADIUS + 2;
-export const CHUNK_LOADS_PER_FRAME = 2;
-export const CHUNK_REBUILDS_PER_FRAME = 2;
+export const CHUNK_LOADS_PER_FRAME = 1;
+export const CHUNK_REBUILDS_PER_FRAME = 1;
 export const WATER_LEVEL = 12;
 
 export const ATLAS_COLUMNS = 8;
@@ -39,24 +39,26 @@ export const MOUSE_SENSITIVITY = 0.0022;
 
 export const CAMERA_FOV = 75;
 export const CAMERA_NEAR = 0.1;
-export const CAMERA_FAR = 420;
+export const CAMERA_FAR = 320;
 export const SPRINT_FOV_BOOST = 8;
 export const SPRINT_FOV_SMOOTH = 8;
+export const RENDER_PIXEL_RATIO_MAX = 1.25;
+export const HELD_ITEM_PIXEL_RATIO_MAX = 1.25;
 
 export const SKY_COLOR = 0x8cc9ff;
 export const FOG_NEAR = 35;
 export const FOG_FAR = 180;
 export const DAY_DURATION_SECONDS = 180;
 export const NIGHT_DURATION_SECONDS = 180;
-export const STAR_COUNT = 320;
-export const CLOUD_COUNT = 52;
+export const STAR_COUNT = 220;
+export const CLOUD_COUNT = 36;
 export const CLOUD_HEIGHT = 54;
 
 export const MAX_RAY_DISTANCE = 6;
 export const MAX_DELTA_TIME = 0.05;
 
-export const ANIMAL_MAX_COUNT = 28;
-export const ANIMAL_SPAWN_INTERVAL = 2.8;
+export const ANIMAL_MAX_COUNT = 16;
+export const ANIMAL_SPAWN_INTERVAL = 3.2;
 export const ANIMAL_SPAWN_RADIUS = 72;
 export const ANIMAL_ATTACK_RANGE = 4.6;
 export const ANIMAL_HP = 5;
@@ -66,7 +68,7 @@ export const INVENTORY_CREATIVE_COLUMNS = 9;
 export const INVENTORY_CREATIVE_ROWS = 6;
 export const TORCH_LIGHT_RADIUS = 12;
 export const TORCH_LIGHT_INTENSITY = 2.0;
-export const TORCH_MAX_ACTIVE_LIGHTS = 22;
+export const TORCH_MAX_ACTIVE_LIGHTS = 8;
 
 export const MUSIC_VOLUME = 0.25;
 export const MUSIC_TRACKS = [

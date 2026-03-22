@@ -12,7 +12,6 @@ export class ItemPreviewCache {
       canvas: this.canvas,
       alpha: true,
       antialias: false,
-      preserveDrawingBuffer: true,
       powerPreference: "high-performance",
     });
     this.renderer.setPixelRatio(1);
@@ -22,13 +21,15 @@ export class ItemPreviewCache {
 
     this.scene = new THREE.Scene();
     this.camera = new THREE.PerspectiveCamera(38, 1, 0.01, 10);
-    this.camera.position.set(1.8, 1.55, 1.8);
+    this.camera.position.set(1.45, 1.18, 1.55);
     this.camera.lookAt(0, 0, 0);
 
-    this.lightA = new THREE.AmbientLight(0xffffff, 0.72);
-    this.lightB = new THREE.DirectionalLight(0xffffff, 0.82);
+    this.lightA = new THREE.AmbientLight(0xffffff, 0.6);
+    this.lightB = new THREE.DirectionalLight(0xffffff, 0.95);
     this.lightB.position.set(2, 3, 2);
-    this.scene.add(this.lightA, this.lightB);
+    this.lightC = new THREE.DirectionalLight(0xffffff, 0.36);
+    this.lightC.position.set(-1.7, 2, -1.4);
+    this.scene.add(this.lightA, this.lightB, this.lightC);
   }
 
   get(blockId) {
@@ -39,11 +40,13 @@ export class ItemPreviewCache {
     const mesh = createItemDisplayMesh(blockId, this.atlasTexture);
     const kind = mesh.userData.itemKind || "block";
     if (kind === "torch") {
-      mesh.rotation.set(-0.26, 0.64, 0.02);
-      mesh.position.set(0, -0.08, 0);
+      mesh.rotation.set(-0.3, 0.62, 0.03);
+      mesh.position.set(-0.01, -0.08, 0);
+      mesh.scale.setScalar(1.18);
     } else {
-      mesh.rotation.set(-0.44, 0.78, 0.05);
-      mesh.position.set(0, -0.02, 0);
+      mesh.rotation.set(-0.63, 0.72, 0.04);
+      mesh.position.set(0, -0.03, 0);
+      mesh.scale.setScalar(1.24);
     }
     this.scene.add(mesh);
     this.renderer.render(this.scene, this.camera);

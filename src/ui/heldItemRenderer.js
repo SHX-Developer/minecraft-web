@@ -1,5 +1,6 @@
 import * as THREE from "three";
 import { createItemDisplayMesh } from "../items/itemMeshFactory.js";
+import { HELD_ITEM_PIXEL_RATIO_MAX } from "../utils/constants.js";
 
 export class HeldItemRenderer {
   constructor(canvas, atlasTexture) {
@@ -8,17 +9,17 @@ export class HeldItemRenderer {
     this.renderer = new THREE.WebGLRenderer({
       canvas: this.canvas,
       alpha: true,
-      antialias: true,
+      antialias: false,
       powerPreference: "high-performance",
     });
-    this.renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+    this.renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, HELD_ITEM_PIXEL_RATIO_MAX));
     this.renderer.outputColorSpace = THREE.SRGBColorSpace;
     this.renderer.setClearColor(0x000000, 0);
     this.renderer.setSize(canvas.clientWidth || 220, canvas.clientHeight || 220, false);
 
     this.scene = new THREE.Scene();
     this.camera = new THREE.PerspectiveCamera(35, 1, 0.01, 12);
-    this.camera.position.set(1.7, 0.9, 2.3);
+    this.camera.position.set(1.55, 0.88, 2.05);
     this.camera.lookAt(0, 0, 0);
 
     this.ambient = new THREE.AmbientLight(0xffffff, 0.9);
@@ -27,13 +28,15 @@ export class HeldItemRenderer {
     this.scene.add(this.ambient, this.dir);
 
     this.handGroup = new THREE.Group();
-    const hand = new THREE.Mesh(
-      new THREE.BoxGeometry(0.34, 0.86, 0.34),
-      new THREE.MeshLambertMaterial({ color: 0xd4b393 })
-    );
-    hand.position.set(0.92, -0.74, 0.18);
-    hand.rotation.set(-0.42, 0.14, 0.06);
-    this.handGroup.add(hand);
+    const armMaterial = new THREE.MeshLambertMaterial({ color: 0xd8b89b });
+    const sleeveMaterial = new THREE.MeshLambertMaterial({ color: 0x5a708f });
+    const hand = new THREE.Mesh(new THREE.BoxGeometry(0.42, 0.98, 0.42), armMaterial);
+    hand.position.set(0.82, -0.72, 0.32);
+    hand.rotation.set(-0.44, 0.18, 0.08);
+    const sleeve = new THREE.Mesh(new THREE.BoxGeometry(0.46, 0.42, 0.46), sleeveMaterial);
+    sleeve.position.set(0.76, -0.52, 0.3);
+    sleeve.rotation.copy(hand.rotation);
+    this.handGroup.add(hand, sleeve);
     this.scene.add(this.handGroup);
 
     this.currentBlockId = null;
@@ -61,13 +64,13 @@ export class HeldItemRenderer {
     this.currentMesh = createItemDisplayMesh(blockId, this.atlasTexture);
     const kind = this.currentMesh.userData.itemKind || "block";
     if (kind === "torch") {
-      this.currentMesh.rotation.set(-0.08, 0.36, -0.08);
-      this.currentMesh.position.set(0.5, -0.42, 0.02);
-      this.currentMesh.scale.setScalar(1.1);
+      this.currentMesh.rotation.set(-0.14, 0.46, -0.1);
+      this.currentMesh.position.set(0.38, -0.42, -0.02);
+      this.currentMesh.scale.setScalar(1.28);
     } else {
-      this.currentMesh.rotation.set(-0.2, 0.8, 0.08);
-      this.currentMesh.position.set(0.32, -0.34, -0.03);
-      this.currentMesh.scale.setScalar(1);
+      this.currentMesh.rotation.set(-0.22, 0.86, 0.08);
+      this.currentMesh.position.set(0.34, -0.36, -0.06);
+      this.currentMesh.scale.setScalar(1.08);
     }
     this.handGroup.add(this.currentMesh);
   }

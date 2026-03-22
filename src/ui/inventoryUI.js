@@ -22,7 +22,7 @@ export class InventoryUI {
     this.cursorElement = cursorElement;
 
     this.model = new InventoryModel();
-    this.previewCache = new ItemPreviewCache(52, atlasTexture);
+    this.previewCache = new ItemPreviewCache(96, atlasTexture);
     this.cursorItem = null;
     this.isOpenState = false;
     this.changeListeners = new Set();

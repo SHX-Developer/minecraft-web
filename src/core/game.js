@@ -41,9 +41,10 @@ function loadAtlasTexture(url) {
       url,
       (texture) => {
         texture.magFilter = THREE.NearestFilter;
-        texture.minFilter = THREE.NearestMipmapLinearFilter;
-        texture.generateMipmaps = true;
+        texture.minFilter = THREE.NearestFilter;
+        texture.generateMipmaps = false;
         texture.colorSpace = THREE.SRGBColorSpace;
+        texture.needsUpdate = true;
         resolve(texture);
       },
       undefined,

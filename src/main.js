@@ -29,7 +29,8 @@ async function bootstrap() {
     throw new Error("Missing required DOM nodes.");
   }
 
-  const atlasUrl = `${new URL("../assets/textures/atlas.png", import.meta.url).href}?v=20260322b`;
+  const atlasVersion = Date.now();
+  const atlasUrl = `${new URL("../assets/textures/atlas.png", import.meta.url).href}?v=${atlasVersion}`;
   const game = new Game({
     canvas,
     hudHotbarRoot: hotbar,

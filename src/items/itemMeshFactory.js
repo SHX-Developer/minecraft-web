@@ -45,7 +45,12 @@ function createTexturedBox(size, tileName, atlasTexture) {
   for (let i = 0; i < 6; i += 1) {
     applyFaceUV(geometry, i, uv);
   }
-  return new THREE.Mesh(geometry, createAtlasMaterial(atlasTexture));
+  const material = createAtlasMaterial(atlasTexture);
+  if (tileName === "torch_head") {
+    material.emissive = new THREE.Color(0xffa94a);
+    material.emissiveIntensity = 0.42;
+  }
+  return new THREE.Mesh(geometry, material);
 }
 
 function createTorchMesh(atlasTexture) {
