@@ -5,18 +5,39 @@ async function bootstrap() {
   const hotbar = document.getElementById("hotbar");
   const debug = document.getElementById("debug");
   const underwaterOverlay = document.getElementById("underwater-overlay");
+  const inventoryOverlay = document.getElementById("inventory-overlay");
+  const inventoryCreativeGrid = document.getElementById("inventory-creative-grid");
+  const inventoryStorageGrid = document.getElementById("inventory-storage-grid");
+  const inventoryHotbar = document.getElementById("inventory-hotbar-grid");
+  const inventoryCursor = document.getElementById("inventory-cursor-item");
+  const heldItemCanvas = document.getElementById("held-item-canvas");
 
-  if (!canvas || !hotbar || !debug || !underwaterOverlay) {
+  if (
+    !canvas ||
+    !hotbar ||
+    !debug ||
+    !underwaterOverlay ||
+    !inventoryOverlay ||
+    !inventoryCreativeGrid ||
+    !inventoryStorageGrid ||
+    !inventoryHotbar ||
+    !inventoryCursor ||
+    !heldItemCanvas
+  ) {
     throw new Error("Missing required DOM nodes.");
   }
 
-  const atlasUrl = new URL("../assets/textures/atlas.png", import.meta.url).href;
   const game = new Game({
     canvas,
-    hotbarRoot: hotbar,
+    hudHotbarRoot: hotbar,
     debugRoot: debug,
     underwaterOverlay,
-    atlasUrl,
+    inventoryOverlay,
+    inventoryCreativeGrid,
+    inventoryStorageGrid,
+    inventoryHotbar,
+    inventoryCursor,
+    heldItemCanvas,
   });
 
   await game.init();

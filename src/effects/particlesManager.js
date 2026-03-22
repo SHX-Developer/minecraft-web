@@ -2,6 +2,7 @@ import * as THREE from "three";
 
 const MAX_PARTICLES = 1200;
 const PARTICLES_PER_BREAK = 14;
+const PARTICLES_PER_PUFF = 18;
 
 export class ParticlesManager {
   constructor(scene) {
@@ -49,6 +50,31 @@ export class ParticlesManager {
         vx: (Math.random() - 0.5) * 3.0,
         vy: 1.2 + Math.random() * 2.6,
         vz: (Math.random() - 0.5) * 3.0,
+        life,
+        maxLife: life,
+        r: this.color.r,
+        g: this.color.g,
+        b: this.color.b,
+      });
+    }
+  }
+
+  spawnDeathPuff(worldX, worldY, worldZ) {
+    this.color.set("#d5d8dd");
+
+    for (let i = 0; i < PARTICLES_PER_PUFF; i += 1) {
+      if (this.particles.length >= MAX_PARTICLES) {
+        this.particles.shift();
+      }
+
+      const life = 0.42 + Math.random() * 0.45;
+      this.particles.push({
+        x: worldX + (Math.random() - 0.5) * 0.7,
+        y: worldY + 0.4 + (Math.random() - 0.5) * 0.35,
+        z: worldZ + (Math.random() - 0.5) * 0.7,
+        vx: (Math.random() - 0.5) * 1.2,
+        vy: 0.5 + Math.random() * 1.3,
+        vz: (Math.random() - 0.5) * 1.2,
         life,
         maxLife: life,
         r: this.color.r,

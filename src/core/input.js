@@ -3,6 +3,7 @@ const CONTROL_CODES = new Set([
   "KeyA",
   "KeyS",
   "KeyD",
+  "KeyE",
   "Space",
   "ShiftLeft",
   "ShiftRight",
@@ -32,6 +33,7 @@ export class InputManager {
     this.keysDown = new Set();
     this.keysPressed = new Set();
     this.mousePressed = new Set();
+    this.mouseDown = new Set();
     this.mouseDeltaX = 0;
     this.mouseDeltaY = 0;
     this.wheelSteps = 0;
@@ -47,6 +49,10 @@ export class InputManager {
     this.onPointerLockChange = () => {
       this.locked = document.pointerLockElement === this.targetElement;
       document.body.classList.toggle("locked", this.locked);
+      if (!this.locked) {
+        this.mousePressed.clear();
+        this.mouseDown.clear();
+      }
     };
 
     this.onKeyDown = (event) => {
@@ -78,8 +84,13 @@ export class InputManager {
       if (!this.locked) {
         return;
       }
+      this.mouseDown.add(event.button);
       this.mousePressed.add(event.button);
       event.preventDefault();
+    };
+
+    this.onMouseUp = (event) => {
+      this.mouseDown.delete(event.button);
     };
 
     this.onContextMenu = (event) => {
@@ -89,6 +100,9 @@ export class InputManager {
     };
 
     this.onWheel = (event) => {
+      if (!this.locked) {
+        return;
+      }
       const direction = Math.sign(event.deltaY);
       if (direction !== 0) {
         this.wheelSteps += direction;
@@ -100,6 +114,7 @@ export class InputManager {
       this.keysDown.clear();
       this.keysPressed.clear();
       this.mousePressed.clear();
+      this.mouseDown.clear();
     };
 
     this.targetElement.addEventListener("click", this.onClick);
@@ -108,6 +123,7 @@ export class InputManager {
     window.addEventListener("keyup", this.onKeyUp);
     window.addEventListener("mousemove", this.onMouseMove);
     window.addEventListener("mousedown", this.onMouseDown);
+    window.addEventListener("mouseup", this.onMouseUp);
     window.addEventListener("contextmenu", this.onContextMenu);
     window.addEventListener("wheel", this.onWheel, { passive: false });
     window.addEventListener("blur", this.onWindowBlur);
@@ -139,6 +155,10 @@ export class InputManager {
     return true;
   }
 
+  isMouseDown(button) {
+    return this.mouseDown.has(button);
+  }
+
   consumeMouseDelta() {
     this.mouseBuffer.x = this.mouseDeltaX;
     this.mouseBuffer.y = this.mouseDeltaY;
@@ -160,6 +180,7 @@ export class InputManager {
     window.removeEventListener("keyup", this.onKeyUp);
     window.removeEventListener("mousemove", this.onMouseMove);
     window.removeEventListener("mousedown", this.onMouseDown);
+    window.removeEventListener("mouseup", this.onMouseUp);
     window.removeEventListener("contextmenu", this.onContextMenu);
     window.removeEventListener("wheel", this.onWheel);
     window.removeEventListener("blur", this.onWindowBlur);

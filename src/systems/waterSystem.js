@@ -19,11 +19,10 @@ export class WaterSystem {
 
   update(delta) {
     const cameraPos = this.playerController.getCameraWorldPosition(this.cameraPos);
-    const cameraBlock = this.world.getBlock(cameraPos.x, cameraPos.y, cameraPos.z);
-    this.isUnderwater = cameraBlock === BLOCK.WATER;
+    this.isUnderwater = this.isCameraInWater(cameraPos);
 
-    const targetOpacity = this.isUnderwater ? 0.38 : 0;
-    const lerpFactor = Math.min(1, delta * 6);
+    const targetOpacity = this.isUnderwater ? 0.5 : 0;
+    const lerpFactor = Math.min(1, delta * 6.5);
     this.overlayOpacity += (targetOpacity - this.overlayOpacity) * lerpFactor;
     this.overlayElement.style.opacity = this.overlayOpacity.toFixed(3);
 
@@ -42,9 +41,30 @@ export class WaterSystem {
       return;
     }
 
-    this.fogColor.copy(baseFogColor).lerp(UNDERWATER_TINT, 0.72);
+    this.fogColor.copy(baseFogColor).lerp(UNDERWATER_TINT, 0.8);
     this.scene.fog.color.copy(this.fogColor);
-    this.scene.fog.near = Math.max(1.4, baseFogNear * 0.14);
-    this.scene.fog.far = Math.max(18, baseFogFar * 0.28);
+    this.scene.fog.near = Math.max(1.1, baseFogNear * 0.1);
+    this.scene.fog.far = Math.max(14, baseFogFar * 0.24);
+  }
+
+  isCameraInWater(cameraPos) {
+    const samples = [
+      [0, 0, 0],
+      [0, -0.1, 0],
+      [0, 0.08, 0],
+      [0.12, 0, 0],
+      [-0.12, 0, 0],
+      [0, 0, 0.12],
+      [0, 0, -0.12],
+    ];
+
+    for (let i = 0; i < samples.length; i += 1) {
+      const s = samples[i];
+      const id = this.world.getBlock(cameraPos.x + s[0], cameraPos.y + s[1], cameraPos.z + s[2]);
+      if (id === BLOCK.WATER) {
+        return true;
+      }
+    }
+    return false;
   }
 }

@@ -1,8 +1,13 @@
 import * as THREE from "three";
 import { CHUNK_SIZE_X, CHUNK_SIZE_Y, CHUNK_SIZE_Z } from "../utils/constants.js";
-import { BLOCK, getAtlasUV, getBlockType, getFaceTile } from "./blockTypes.js";
-
-const WATER_SURFACE_DROP = 0.12;
+import {
+  BLOCK,
+  getAtlasUV,
+  getBlockType,
+  getFaceTile,
+  isBlockCube,
+  isTorchBlock,
+} from "./blockTypes.js";
 
 const FACES = [
   {
@@ -93,30 +98,31 @@ function shouldRenderFace(blockType, blockId, neighborId) {
     return true;
   }
 
+  if (blockId === BLOCK.WATER) {
+    if (neighborId === BLOCK.WATER) {
+      return false;
+    }
+    // Water against opaque solids is hidden; all other transitions stay visible.
+    return neighborType.transparent || !neighborType.solid;
+  }
+
   if (blockType.transparent) {
-    return neighborId !== blockId;
+    if (neighborId === blockId) {
+      return false;
+    }
+    return neighborType.transparent || !neighborType.solid;
   }
   return neighborType.transparent;
 }
 
-function pushFace(buffers, lx, y, lz, face, uv, blockId) {
+function pushFaceWithBounds(buffers, min, max, face, uv) {
   const baseIndex = buffers.vertexCount;
 
   for (let i = 0; i < 4; i += 1) {
     const corner = face.corners[i];
-    let vx = lx + corner[0];
-    let vy = y + corner[1];
-    let vz = lz + corner[2];
-
-    if (blockId === BLOCK.WATER) {
-      const isTopVertex = corner[1] === 1;
-      if (face.name === "top" && isTopVertex) {
-        vy -= WATER_SURFACE_DROP;
-      } else if (face.name !== "bottom" && isTopVertex) {
-        vy -= WATER_SURFACE_DROP;
-      }
-    }
-
+    const vx = min[0] + (max[0] - min[0]) * corner[0];
+    const vy = min[1] + (max[1] - min[1]) * corner[1];
+    const vz = min[2] + (max[2] - min[2]) * corner[2];
     buffers.positions.push(vx, vy, vz);
     buffers.normals.push(face.normal[0], face.normal[1], face.normal[2]);
   }
@@ -141,6 +147,98 @@ function pushFace(buffers, lx, y, lz, face, uv, blockId) {
     baseIndex + 3
   );
   buffers.vertexCount += 4;
+}
+
+function pushFace(buffers, lx, y, lz, face, uv) {
+  const baseIndex = buffers.vertexCount;
+
+  for (let i = 0; i < 4; i += 1) {
+    const corner = face.corners[i];
+    buffers.positions.push(lx + corner[0], y + corner[1], lz + corner[2]);
+    buffers.normals.push(face.normal[0], face.normal[1], face.normal[2]);
+  }
+
+  buffers.uvs.push(
+    uv.u1,
+    uv.v0,
+    uv.u1,
+    uv.v1,
+    uv.u0,
+    uv.v1,
+    uv.u0,
+    uv.v0
+  );
+
+  buffers.indices.push(
+    baseIndex,
+    baseIndex + 1,
+    baseIndex + 2,
+    baseIndex,
+    baseIndex + 2,
+    baseIndex + 3
+  );
+  buffers.vertexCount += 4;
+}
+
+function pushTorch(buffers, lx, y, lz, blockId) {
+  const tile = getFaceTile(blockId, "top");
+  const uv = getAtlasUV(tile);
+
+  let minX = lx + 0.43;
+  let maxX = lx + 0.57;
+  let minY = y + 0.03;
+  let maxY = y + 0.74;
+  let minZ = lz + 0.43;
+  let maxZ = lz + 0.57;
+
+  if (blockId === BLOCK.TORCH_WEST) {
+    minX = lx + 0.12;
+    maxX = lx + 0.26;
+    minY = y + 0.24;
+    maxY = y + 0.92;
+  } else if (blockId === BLOCK.TORCH_EAST) {
+    minX = lx + 0.74;
+    maxX = lx + 0.88;
+    minY = y + 0.24;
+    maxY = y + 0.92;
+  } else if (blockId === BLOCK.TORCH_NORTH) {
+    minZ = lz + 0.12;
+    maxZ = lz + 0.26;
+    minY = y + 0.24;
+    maxY = y + 0.92;
+  } else if (blockId === BLOCK.TORCH_SOUTH) {
+    minZ = lz + 0.74;
+    maxZ = lz + 0.88;
+    minY = y + 0.24;
+    maxY = y + 0.92;
+  }
+
+  for (let i = 0; i < FACES.length; i += 1) {
+    pushFaceWithBounds(
+      buffers,
+      [minX, minY, minZ],
+      [maxX, maxY, maxZ],
+      FACES[i],
+      uv
+    );
+  }
+
+  const flameMinX = (minX + maxX) * 0.5 - 0.09;
+  const flameMaxX = (minX + maxX) * 0.5 + 0.09;
+  const flameMinY = maxY - 0.03;
+  const flameMaxY = maxY + 0.17;
+  const flameMinZ = (minZ + maxZ) * 0.5 - 0.09;
+  const flameMaxZ = (minZ + maxZ) * 0.5 + 0.09;
+
+  for (let i = 0; i < FACES.length; i += 1) {
+    pushFaceWithBounds(
+      buffers,
+      [flameMinX, flameMinY, flameMinZ],
+      [flameMaxX, flameMaxY, flameMaxZ],
+      FACES[i],
+      uv
+    );
+  }
 }
 
 function toGeometry(buffers) {
@@ -178,6 +276,12 @@ export function buildChunkMeshes(chunk, world) {
         }
 
         const buffers = blockType.transparent ? transparentBuffers : opaqueBuffers;
+
+        if (isTorchBlock(blockId) || !isBlockCube(blockId)) {
+          pushTorch(opaqueBuffers, lx, y, lz, blockId);
+          continue;
+        }
+
         const wx = chunkWorldX + lx;
         const wz = chunkWorldZ + lz;
 
@@ -187,10 +291,9 @@ export function buildChunkMeshes(chunk, world) {
           if (!shouldRenderFace(blockType, blockId, neighborId)) {
             continue;
           }
-
           const tile = getFaceTile(blockId, face.name);
           const uv = getAtlasUV(tile);
-          pushFace(buffers, lx, y, lz, face, uv, blockId);
+          pushFace(buffers, lx, y, lz, face, uv);
         }
       }
     }

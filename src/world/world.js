@@ -1,5 +1,7 @@
 import * as THREE from "three";
 import {
+  CHUNK_LOADS_PER_FRAME,
+  CHUNK_REBUILDS_PER_FRAME,
   CHUNK_SIZE_X,
   CHUNK_SIZE_Y,
   CHUNK_SIZE_Z,
@@ -18,35 +20,116 @@ export class World {
     this.scene = scene;
     this.generator = new WorldGenerator();
     this.chunks = new Map();
+
     this.lastCenterChunkKey = null;
+    this.centerCx = 0;
+    this.centerCz = 0;
+
+    this.loadQueue = [];
+    this.loadQueued = new Set();
+    this.rebuildQueue = [];
+    this.rebuildQueued = new Set();
 
     this.opaqueMaterial = new THREE.MeshLambertMaterial({
       map: atlasTexture,
+      alphaTest: 0.05,
     });
     this.transparentMaterial = new THREE.MeshLambertMaterial({
       map: atlasTexture,
       transparent: true,
-      opacity: 0.68,
+      opacity: 0.62,
       depthWrite: false,
-      side: THREE.DoubleSide,
+      depthTest: true,
+      side: THREE.FrontSide,
     });
+
+    this.chunkHalfExtents = new THREE.Vector3(CHUNK_SIZE_X * 0.5, CHUNK_SIZE_Y * 0.5, CHUNK_SIZE_Z * 0.5);
+    this.chunkBoundingRadius = this.chunkHalfExtents.length();
+    this.frustum = new THREE.Frustum();
+    this.projScreenMatrix = new THREE.Matrix4();
+    this.tempSphere = new THREE.Sphere(new THREE.Vector3(), this.chunkBoundingRadius);
   }
 
   update(playerPosition) {
     const center = worldToChunkCoords(playerPosition.x, playerPosition.z);
     const centerKey = chunkKey(center.cx, center.cz);
-    if (centerKey === this.lastCenterChunkKey) {
-      return;
-    }
-    this.lastCenterChunkKey = centerKey;
 
+    if (centerKey !== this.lastCenterChunkKey) {
+      this.lastCenterChunkKey = centerKey;
+      this.centerCx = center.cx;
+      this.centerCz = center.cz;
+      this.enqueueChunksAround(center.cx, center.cz);
+      this.pruneLoadQueue(center.cx, center.cz);
+      this.unloadFarChunks(center.cx, center.cz);
+    }
+
+    this.processLoadQueue(CHUNK_LOADS_PER_FRAME);
+    this.processRebuildQueue(CHUNK_REBUILDS_PER_FRAME);
+  }
+
+  enqueueChunksAround(centerCx, centerCz) {
     for (let dz = -WORLD_RENDER_RADIUS; dz <= WORLD_RENDER_RADIUS; dz += 1) {
       for (let dx = -WORLD_RENDER_RADIUS; dx <= WORLD_RENDER_RADIUS; dx += 1) {
-        this.ensureChunk(center.cx + dx, center.cz + dz);
+        const cx = centerCx + dx;
+        const cz = centerCz + dz;
+        const key = chunkKey(cx, cz);
+        if (this.chunks.has(key) || this.loadQueued.has(key)) {
+          continue;
+        }
+        const distSq = dx * dx + dz * dz;
+        this.loadQueue.push({ cx, cz, distSq });
+        this.loadQueued.add(key);
       }
     }
 
-    this.unloadFarChunks(center.cx, center.cz);
+    this.loadQueue.sort((a, b) => a.distSq - b.distSq);
+  }
+
+  pruneLoadQueue(centerCx, centerCz) {
+    const nextQueue = [];
+    this.loadQueued.clear();
+
+    for (let i = 0; i < this.loadQueue.length; i += 1) {
+      const item = this.loadQueue[i];
+      if (
+        Math.abs(item.cx - centerCx) <= WORLD_RENDER_RADIUS &&
+        Math.abs(item.cz - centerCz) <= WORLD_RENDER_RADIUS
+      ) {
+        item.distSq = (item.cx - centerCx) ** 2 + (item.cz - centerCz) ** 2;
+        nextQueue.push(item);
+        this.loadQueued.add(chunkKey(item.cx, item.cz));
+      }
+    }
+
+    nextQueue.sort((a, b) => a.distSq - b.distSq);
+    this.loadQueue = nextQueue;
+  }
+
+  processLoadQueue(maxLoads) {
+    let loaded = 0;
+    while (loaded < maxLoads && this.loadQueue.length > 0) {
+      const item = this.loadQueue.shift();
+      const key = chunkKey(item.cx, item.cz);
+      this.loadQueued.delete(key);
+
+      if (this.chunks.has(key)) {
+        continue;
+      }
+
+      this.ensureChunk(item.cx, item.cz);
+      loaded += 1;
+    }
+  }
+
+  processRebuildQueue(maxRebuilds) {
+    let rebuilt = 0;
+    while (rebuilt < maxRebuilds && this.rebuildQueue.length > 0) {
+      const key = this.rebuildQueue.shift();
+      this.rebuildQueued.delete(key);
+      const [cxStr, czStr] = key.split(",");
+      this.rebuildChunkNow(Number(cxStr), Number(czStr));
+      rebuilt += 1;
+    }
   }
 
   ensureChunk(cx, cz) {
@@ -72,14 +155,22 @@ export class World {
       transparentMesh: null,
     };
     this.chunks.set(key, entry);
-    this.rebuildChunk(cx, cz);
 
-    // Rebuild neighbors so shared borders can cull now-hidden faces.
-    this.rebuildChunk(cx - 1, cz);
-    this.rebuildChunk(cx + 1, cz);
-    this.rebuildChunk(cx, cz - 1);
-    this.rebuildChunk(cx, cz + 1);
+    this.enqueueRebuild(cx, cz);
+    this.enqueueRebuild(cx - 1, cz);
+    this.enqueueRebuild(cx + 1, cz);
+    this.enqueueRebuild(cx, cz - 1);
+    this.enqueueRebuild(cx, cz + 1);
     return entry;
+  }
+
+  enqueueRebuild(cx, cz) {
+    const key = chunkKey(cx, cz);
+    if (!this.chunks.has(key) || this.rebuildQueued.has(key)) {
+      return;
+    }
+    this.rebuildQueued.add(key);
+    this.rebuildQueue.push(key);
   }
 
   getChunkEntry(cx, cz) {
@@ -87,7 +178,8 @@ export class World {
   }
 
   getBlock(worldX, y, worldZ) {
-    if (y < 0 || y >= CHUNK_SIZE_Y) {
+    const yi = Math.floor(y);
+    if (yi < 0 || yi >= CHUNK_SIZE_Y) {
       return BLOCK.AIR;
     }
     const { cx, cz, lx, lz } = worldToChunkCoords(worldX, worldZ);
@@ -95,11 +187,12 @@ export class World {
     if (!entry) {
       return BLOCK.AIR;
     }
-    return entry.chunk.get(lx, y, lz);
+    return entry.chunk.get(lx, yi, lz);
   }
 
   setBlock(worldX, y, worldZ, id) {
-    if (y < 0 || y >= CHUNK_SIZE_Y) {
+    const yi = Math.floor(y);
+    if (yi < 0 || yi >= CHUNK_SIZE_Y) {
       return false;
     }
 
@@ -108,19 +201,20 @@ export class World {
 
     if (!entry && id !== BLOCK.AIR) {
       entry = this.ensureChunk(cx, cz);
+      this.rebuildChunkNow(cx, cz);
     }
     if (!entry) {
       return false;
     }
 
-    const current = entry.chunk.get(lx, y, lz);
+    const current = entry.chunk.get(lx, yi, lz);
     if (current === id) {
       return false;
     }
 
-    entry.chunk.set(lx, y, lz, id);
-    this.rebuildChunk(cx, cz);
-    this.rebuildChunkBorders(cx, cz, lx, lz);
+    entry.chunk.set(lx, yi, lz, id);
+    this.rebuildChunkNow(cx, cz);
+    this.rebuildChunkBordersNow(cx, cz, lx, lz);
     return true;
   }
 
@@ -128,21 +222,21 @@ export class World {
     return isBlockReplaceable(this.getBlock(worldX, y, worldZ));
   }
 
-  rebuildChunkBorders(cx, cz, lx, lz) {
+  rebuildChunkBordersNow(cx, cz, lx, lz) {
     if (lx === 0) {
-      this.rebuildChunk(cx - 1, cz);
+      this.rebuildChunkNow(cx - 1, cz);
     } else if (lx === CHUNK_SIZE_X - 1) {
-      this.rebuildChunk(cx + 1, cz);
+      this.rebuildChunkNow(cx + 1, cz);
     }
 
     if (lz === 0) {
-      this.rebuildChunk(cx, cz - 1);
+      this.rebuildChunkNow(cx, cz - 1);
     } else if (lz === CHUNK_SIZE_Z - 1) {
-      this.rebuildChunk(cx, cz + 1);
+      this.rebuildChunkNow(cx, cz + 1);
     }
   }
 
-  rebuildChunk(cx, cz) {
+  rebuildChunkNow(cx, cz) {
     const entry = this.getChunkEntry(cx, cz);
     if (!entry) {
       return;
@@ -163,6 +257,7 @@ export class World {
     if (meshes.opaqueGeometry) {
       const opaqueMesh = new THREE.Mesh(meshes.opaqueGeometry, this.opaqueMaterial);
       opaqueMesh.frustumCulled = true;
+      opaqueMesh.renderOrder = 0;
       entry.group.add(opaqueMesh);
       entry.opaqueMesh = opaqueMesh;
     }
@@ -170,7 +265,7 @@ export class World {
     if (meshes.transparentGeometry) {
       const transparentMesh = new THREE.Mesh(meshes.transparentGeometry, this.transparentMaterial);
       transparentMesh.frustumCulled = true;
-      transparentMesh.renderOrder = 2;
+      transparentMesh.renderOrder = 1;
       entry.group.add(transparentMesh);
       entry.transparentMesh = transparentMesh;
     }
@@ -185,6 +280,7 @@ export class World {
       }
       this.disposeChunkEntry(entry);
       this.chunks.delete(key);
+      this.rebuildQueued.delete(key);
     }
   }
 
@@ -206,6 +302,24 @@ export class World {
     return new THREE.Vector3(worldX + 0.5, spawnY, worldZ + 0.5);
   }
 
+  forceLoadSyncAround(worldX, worldZ, radius = 2) {
+    const center = worldToChunkCoords(worldX, worldZ);
+    for (let dz = -radius; dz <= radius; dz += 1) {
+      for (let dx = -radius; dx <= radius; dx += 1) {
+        this.ensureChunk(center.cx + dx, center.cz + dz);
+      }
+    }
+    for (let dz = -radius; dz <= radius; dz += 1) {
+      for (let dx = -radius; dx <= radius; dx += 1) {
+        this.rebuildChunkNow(center.cx + dx, center.cz + dz);
+      }
+    }
+  }
+
+  getSurfaceHeight(worldX, worldZ) {
+    return this.generator.getSurfaceHeight(worldX, worldZ);
+  }
+
   getCurrentChunkCoords(worldX, worldZ) {
     const { cx, cz } = worldToChunkCoords(worldX, worldZ);
     return { cx, cz };
@@ -213,5 +327,31 @@ export class World {
 
   getActiveChunkCount() {
     return this.chunks.size;
+  }
+
+  getVisibleChunkCount(camera) {
+    camera.updateMatrixWorld();
+    this.projScreenMatrix.multiplyMatrices(camera.projectionMatrix, camera.matrixWorldInverse);
+    this.frustum.setFromProjectionMatrix(this.projScreenMatrix);
+
+    let visible = 0;
+    for (const entry of this.chunks.values()) {
+      this.tempSphere.center.set(
+        entry.group.position.x + this.chunkHalfExtents.x,
+        this.chunkHalfExtents.y,
+        entry.group.position.z + this.chunkHalfExtents.z
+      );
+      if (this.frustum.intersectsSphere(this.tempSphere)) {
+        visible += 1;
+      }
+    }
+    return visible;
+  }
+
+  getQueueSizes() {
+    return {
+      loadQueue: this.loadQueue.length,
+      rebuildQueue: this.rebuildQueue.length,
+    };
   }
 }

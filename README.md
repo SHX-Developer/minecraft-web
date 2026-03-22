@@ -1,35 +1,61 @@
-# VoxelCraft MVP (Three.js)
+# VoxelCraft MVP+ (Three.js)
 
 Minecraft-like browser MVP on HTML/CSS/JavaScript (ES modules) + Three.js.
 
-## Features
+## What Is Implemented
 
-- First-person controls with Pointer Lock and corrected forward/back movement.
-- `Shift` crouch: reduced movement speed + lower camera + shorter collision height.
-- Double-tap `W` sprint (forward only) with auto-stop rules.
-- Procedural chunk world (terrain layers, water level, beaches, sparse trees).
-- Chunk mesh batching with hidden-face culling.
-- Separate opaque / transparent rendering path (water is translucent).
-- Texture atlas UV mapping with per-face support (`top/side/bottom`).
-- Block interaction:
-  - LMB break (with lightweight particle burst).
-  - RMB place next to targeted face.
-  - Border edits rebuild neighboring chunk meshes.
-- Hotbar selection:
-  - Keyboard `1..9`.
-  - Mouse wheel with cyclic wrapping.
-- Underwater mode:
-  - Blue tint overlay.
-  - Reduced visibility via fog.
-  - Swim movement + vertical control.
-- Day/night cycle:
-  - Day 2 min + night 2 min.
-  - Dynamic sky/fog/light transitions.
-  - Simple sun and moon objects.
-- Optional background music system that starts only after user interaction.
-- Procedural SFX:
-  - block breaking click/crunch
-  - footsteps (different cadence for sprint/crouch/water)
+- First-person world with chunked voxel terrain and mesh batching.
+- Creative inventory (`E`) with:
+  - large block list,
+  - storage grid,
+  - hotbar sync,
+  - drag & drop / swap between slots.
+- Hotbar + inventory item previews are rendered as 3D-like item renders (not flat color squares).
+- Held item renderer in bottom-right corner.
+- Block placement / destruction:
+  - LMB hold: repeat break every `0.25s`,
+  - RMB hold: repeat place every `0.25s`,
+  - chunk-neighbor rebuild when border blocks change.
+- Torch as placeable block:
+  - floor and wall variants,
+  - lightweight local torch lighting (pooled capped point lights).
+- Movement upgrades:
+  - `W/S` fixed,
+  - `Shift` crouch + speed reduction,
+  - crouch edge protection,
+  - double-tap `W` sprint,
+  - hold `Space` = auto-jump on landing,
+  - double-tap `Space` toggles creative flight.
+- Water:
+  - separate transparent mesh path,
+  - face culling between neighboring water blocks,
+  - underwater tint + fog,
+  - swim movement + shore step-up assist.
+- Day/night cycle with sky transitions, square sun, square moon, stars, and clouds.
+- Animals (chicken/pig/cow/sheep):
+  - improved blocky shapes with readable silhouettes,
+  - simple world collision checks,
+  - forward wander behavior + turning near obstacles,
+  - hit flash + death puff particles.
+- Audio:
+  - background music playlist after user interaction,
+  - procedural block-break and footstep sounds.
+
+## Controls
+
+- `W/A/S/D` move
+- `Mouse` look
+- `Space` jump (hold for auto-jump on ground)
+- `Double Space` toggle creative flight on/off
+- `Shift` crouch (and safe edge movement)
+- `Double W` sprint (forward)
+- `LMB` break block / attack animal
+- `RMB` place block
+- `Hold LMB/RMB` repeat action every `0.25s`
+- `1..9` hotbar slot select
+- `Mouse wheel` hotbar cycle (wrap-around)
+- `E` open/close creative inventory
+- `Esc` unlock pointer
 
 ## Run Locally
 
@@ -40,35 +66,15 @@ Minecraft-like browser MVP on HTML/CSS/JavaScript (ES modules) + Three.js.
 3. Open the served URL in browser.
 4. Click inside the canvas to lock pointer.
 
-## Controls
-
-- `W` forward, `S` backward, `A/D` strafe
-- `Space` jump (or swim up in water)
-- `Shift` crouch (or swim down in water)
-- Double-tap `W` to sprint forward
-- `Mouse` look around
-- `LMB` break block
-- `RMB` place block
-- `Mouse wheel` cycle hotbar slot
-- `1..9` direct hotbar slot select
-- `Esc` unlock pointer
-
 ## Music Setup
 
 - Put your files in `assets/audio/`.
-- Default expected names are:
-  - `assets/audio/13. Aria Math.mp3` (detected local example)
-  - `assets/audio/track1.mp3`
-  - `assets/audio/track2.mp3`
-- You can change playlist paths and volume in `src/utils/constants.js`:
+- Update playlist in `src/utils/constants.js`:
   - `MUSIC_TRACKS`
   - `MUSIC_VOLUME`
-  - `SFX_MASTER_VOLUME`
-  - `SFX_BREAK_VOLUME`
-  - `SFX_FOOTSTEP_VOLUME`
-- If files are missing, music system stays idle without crashing.
+- Music starts only after user interaction (browser autoplay policy).
 
-## Project Structure
+## Main Structure
 
 ```text
 index.html
@@ -86,15 +92,28 @@ src/
     chunkMesh.js
     blockTypes.js
     worldGenerator.js
+    generatedAtlas.js
   player/
     player.js
     playerController.js
     raycast.js
   ui/
     hotbar.js
+    inventoryModel.js
+    inventoryUI.js
+    itemPreviewCache.js
+    heldItemRenderer.js
+  items/
+    itemMeshFactory.js
   systems/
     dayNightCycle.js
+    cloudSystem.js
+    sprintFovSystem.js
     waterSystem.js
+    torchLightSystem.js
+  entities/
+    animalManager.js
+    animalTypes.js
   audio/
     musicManager.js
     sfxManager.js
@@ -111,7 +130,11 @@ assets/
 README.md
 ```
 
-## Notes
+## Current MVP Limits
 
-- This is still MVP scope: no inventory, mobs, save/load, multiplayer, crafting.
-- Water physics are intentionally lightweight and gameplay-oriented.
+- No crafting logic (2x2 block is UI placeholder only).
+- No survival stacks/hunger/player HP.
+- No loot drops.
+- No persistent save/load.
+- No advanced AI/pathfinding.
+

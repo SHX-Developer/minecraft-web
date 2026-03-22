@@ -5,43 +5,67 @@ import {
   FOG_NEAR,
   NIGHT_DURATION_SECONDS,
   SKY_COLOR,
+  STAR_COUNT,
 } from "../utils/constants.js";
 import { clamp } from "../utils/helpers.js";
 
 const DAY_SKY = new THREE.Color(SKY_COLOR);
-const SUNSET_SKY = new THREE.Color(0xff9b66);
-const NIGHT_SKY = new THREE.Color(0x0f1835);
+const SUNSET_SKY = new THREE.Color(0xff9352);
+const NIGHT_SKY = new THREE.Color(0x01040b);
 
-const DAY_FOG = new THREE.Color(0x9ed0ff);
-const SUNSET_FOG = new THREE.Color(0xcd7d56);
-const NIGHT_FOG = new THREE.Color(0x1a2948);
+const DAY_FOG = new THREE.Color(0x95caff);
+const SUNSET_FOG = new THREE.Color(0xb66f4c);
+const NIGHT_FOG = new THREE.Color(0x0c1830);
 
 export class DayNightCycle {
   constructor(scene) {
     this.scene = scene;
     this.cycleDuration = DAY_DURATION_SECONDS + NIGHT_DURATION_SECONDS;
     this.time = 0;
-    this.orbitRadius = 130;
-    this.orbitTilt = 0.25;
+    this.orbitRadius = 320;
+    this.skyElevation = 88;
+    this.worldAzimuth = 0.42;
 
-    this.sunLight = new THREE.DirectionalLight(0xfff0d8, 1.0);
-    this.moonLight = new THREE.DirectionalLight(0xa8c0ff, 0.0);
-    this.ambientLight = new THREE.HemisphereLight(0xbddcff, 0x4b5a46, 0.72);
+    this.skyAnchor = new THREE.Group();
+    this.scene.add(this.skyAnchor);
+
+    this.sunLight = new THREE.DirectionalLight(0xffefcb, 1.0);
+    this.moonLight = new THREE.DirectionalLight(0x94b4ff, 0.0);
+    this.ambientLight = new THREE.HemisphereLight(0xb4d1ff, 0x33432f, 0.68);
     this.lightTarget = new THREE.Object3D();
     this.scene.add(this.ambientLight, this.sunLight, this.moonLight, this.lightTarget);
-
     this.sunLight.target = this.lightTarget;
     this.moonLight.target = this.lightTarget;
 
+    const squareGeometry = new THREE.PlaneGeometry(18, 18);
     this.sunMesh = new THREE.Mesh(
-      new THREE.SphereGeometry(3.2, 18, 18),
-      new THREE.MeshBasicMaterial({ color: 0xffdc86 })
+      squareGeometry,
+      new THREE.MeshBasicMaterial({
+        color: 0xffc66f,
+        transparent: true,
+        opacity: 1,
+        depthTest: true,
+        depthWrite: false,
+        fog: false,
+        side: THREE.DoubleSide,
+      })
     );
     this.moonMesh = new THREE.Mesh(
-      new THREE.SphereGeometry(2.6, 18, 18),
-      new THREE.MeshBasicMaterial({ color: 0xe5ecff })
+      squareGeometry.clone(),
+      new THREE.MeshBasicMaterial({
+        color: 0xd6e6ff,
+        transparent: true,
+        opacity: 1,
+        depthTest: true,
+        depthWrite: false,
+        fog: false,
+        side: THREE.DoubleSide,
+      })
     );
-    this.scene.add(this.sunMesh, this.moonMesh);
+    this.skyAnchor.add(this.sunMesh, this.moonMesh);
+
+    this.starField = this.createStarField();
+    this.skyAnchor.add(this.starField);
 
     this.currentSkyColor = DAY_SKY.clone();
     this.currentFogColor = DAY_FOG.clone();
@@ -50,49 +74,89 @@ export class DayNightCycle {
     this.sunFactor = 1;
     this.moonFactor = 0;
 
-    this.sunPos = new THREE.Vector3();
-    this.moonPos = new THREE.Vector3();
+    this.sunDir = new THREE.Vector3();
+    this.moonDir = new THREE.Vector3();
+    this.azimuthQuat = new THREE.Quaternion().setFromAxisAngle(
+      new THREE.Vector3(0, 1, 0),
+      this.worldAzimuth
+    );
+    this.centerAtEye = new THREE.Vector3();
+    this.lightTargetPos = new THREE.Vector3();
   }
 
-  update(delta, centerPosition) {
+  createStarField() {
+    const positions = new Float32Array(STAR_COUNT * 3);
+    for (let i = 0; i < STAR_COUNT; i += 1) {
+      const phi = Math.acos(1 - Math.random() * 0.9);
+      const theta = Math.random() * Math.PI * 2;
+      const radius = this.orbitRadius * (1.02 + Math.random() * 0.22);
+      const x = Math.sin(phi) * Math.cos(theta) * radius;
+      const y = Math.abs(Math.cos(phi)) * radius + 45;
+      const z = Math.sin(phi) * Math.sin(theta) * radius;
+      const idx = i * 3;
+      positions[idx] = x;
+      positions[idx + 1] = y;
+      positions[idx + 2] = z;
+    }
+
+    const geometry = new THREE.BufferGeometry();
+    geometry.setAttribute("position", new THREE.BufferAttribute(positions, 3));
+    const material = new THREE.PointsMaterial({
+      color: 0xeef5ff,
+      size: 1.45,
+      transparent: true,
+      opacity: 0,
+      sizeAttenuation: true,
+      depthWrite: false,
+      fog: false,
+    });
+    return new THREE.Points(geometry, material);
+  }
+
+  update(delta, playerPosition) {
     this.time = (this.time + delta) % this.cycleDuration;
     const phase = this.time / this.cycleDuration;
-    const angle = phase * Math.PI * 2;
+    const angle = phase * Math.PI * 2 - Math.PI * 0.5;
     const sunElevation = Math.sin(angle);
-    const azimuth = Math.cos(angle);
 
-    this.sunPos.set(
-      centerPosition.x + azimuth * this.orbitRadius,
-      centerPosition.y + sunElevation * this.orbitRadius,
-      centerPosition.z + Math.sin(angle + this.orbitTilt) * this.orbitRadius
-    );
-    this.moonPos.copy(centerPosition).sub(this.sunPos).add(centerPosition);
+    // Keep celestial bodies visually distant while preserving stable world-space motion.
+    this.skyAnchor.position.set(playerPosition.x, this.skyElevation, playerPosition.z);
 
-    this.sunMesh.position.copy(this.sunPos);
-    this.moonMesh.position.copy(this.moonPos);
-    this.sunLight.position.copy(this.sunPos);
-    this.moonLight.position.copy(this.moonPos);
-    this.lightTarget.position.copy(centerPosition);
+    this.sunDir.set(Math.cos(angle), Math.sin(angle), 0).applyQuaternion(this.azimuthQuat).normalize();
+    this.moonDir.copy(this.sunDir).multiplyScalar(-1);
 
-    this.sunFactor = clamp(sunElevation * 1.15 + 0.05, 0, 1);
-    this.moonFactor = clamp(-sunElevation * 0.5, 0, 0.5);
+    this.sunMesh.position.copy(this.sunDir).multiplyScalar(this.orbitRadius);
+    this.moonMesh.position.copy(this.moonDir).multiplyScalar(this.orbitRadius);
 
-    this.sunLight.intensity = this.sunFactor * 1.15;
-    this.moonLight.intensity = this.moonFactor;
-    this.ambientLight.intensity = 0.18 + this.sunFactor * 0.62;
+    this.centerAtEye.set(0, 0, 0);
+    this.sunMesh.lookAt(this.centerAtEye);
+    this.moonMesh.lookAt(this.centerAtEye);
+
+    const sunWorldPos = this.sunMesh.getWorldPosition(this.lightTargetPos);
+    this.sunLight.position.copy(sunWorldPos);
+    const moonWorldPos = this.moonMesh.getWorldPosition(this.lightTargetPos);
+    this.moonLight.position.copy(moonWorldPos);
+
+    this.lightTarget.position.set(playerPosition.x, playerPosition.y + 16, playerPosition.z);
+
+    this.sunFactor = clamp(sunElevation * 1.17 + 0.05, 0, 1);
+    this.moonFactor = clamp(-sunElevation * 0.67, 0, 0.67);
+
+    this.sunLight.intensity = this.sunFactor * 1.2;
+    this.moonLight.intensity = this.moonFactor * 0.95;
+    this.ambientLight.intensity = 0.1 + this.sunFactor * 0.62;
 
     const twilight = clamp(1 - Math.abs(sunElevation) * 3.2, 0, 1);
     this.currentSkyColor.copy(NIGHT_SKY).lerp(DAY_SKY, this.sunFactor);
     this.currentFogColor.copy(NIGHT_FOG).lerp(DAY_FOG, this.sunFactor);
-
     if (twilight > 0) {
-      const twilightBoost = twilight * 0.5;
-      this.currentSkyColor.lerp(SUNSET_SKY, twilightBoost);
-      this.currentFogColor.lerp(SUNSET_FOG, twilightBoost);
+      const tint = twilight * 0.58;
+      this.currentSkyColor.lerp(SUNSET_SKY, tint);
+      this.currentFogColor.lerp(SUNSET_FOG, tint);
     }
 
-    this.currentFogNear = 20 + this.sunFactor * (FOG_NEAR - 20);
-    this.currentFogFar = 95 + this.sunFactor * (FOG_FAR - 95);
+    this.currentFogNear = 12 + this.sunFactor * (FOG_NEAR - 12);
+    this.currentFogFar = 74 + this.sunFactor * (FOG_FAR - 74);
 
     this.scene.background.copy(this.currentSkyColor);
     if (this.scene.fog) {
@@ -100,5 +164,10 @@ export class DayNightCycle {
       this.scene.fog.near = this.currentFogNear;
       this.scene.fog.far = this.currentFogFar;
     }
+
+    const starsOpacity = clamp((this.moonFactor - 0.08) * 2.4, 0, 0.88);
+    this.starField.material.opacity = starsOpacity;
+    this.sunMesh.material.opacity = clamp((this.sunFactor - 0.02) * 1.22, 0, 1);
+    this.moonMesh.material.opacity = clamp((this.moonFactor - 0.03) * 1.7, 0, 0.95);
   }
 }

@@ -20,9 +20,38 @@
       <div id="underwater-overlay" aria-hidden="true"></div>
       <div id="crosshair" aria-hidden="true"></div>
       <div id="hotbar" aria-label="Hotbar"></div>
+      <canvas id="held-item-canvas" aria-hidden="true"></canvas>
+      <div id="inventory-overlay" aria-hidden="true">
+        <div id="inventory-panel">
+          <div id="inventory-header">
+            <span>Creative Inventory</span>
+            <span class="inventory-hint">E to close</span>
+          </div>
+          <div id="inventory-main">
+            <div id="inventory-creative">
+              <div class="inventory-section-title">Blocks</div>
+              <div id="inventory-creative-grid"></div>
+            </div>
+            <div id="inventory-side">
+              <div class="inventory-section-title">Crafting (placeholder)</div>
+              <div id="inventory-crafting-placeholder">
+                <div class="craft-slot"></div>
+                <div class="craft-slot"></div>
+                <div class="craft-slot"></div>
+                <div class="craft-slot"></div>
+              </div>
+              <div class="inventory-section-title">Storage</div>
+              <div id="inventory-storage-grid"></div>
+            </div>
+          </div>
+          <div class="inventory-section-title">Hotbar</div>
+          <div id="inventory-hotbar-grid"></div>
+        </div>
+      </div>
+      <div id="inventory-cursor-item" aria-hidden="true"></div>
       <div id="hint">
-        Click to lock pointer. W/S forward-back, Shift crouch, double-tap W sprint, wheel or 1-9 select
-        block.
+        Click to lock pointer. E inventory, double Space flight, Shift crouch, double W sprint, wheel or
+        1-9 select block.
       </div>
       <div id="debug" aria-live="polite"></div>
     </div>

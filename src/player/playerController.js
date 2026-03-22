@@ -1,7 +1,10 @@
 import * as THREE from "three";
 import {
+  FLIGHT_DOUBLE_TAP_WINDOW,
   MOUSE_SENSITIVITY,
   PLAYER_CROUCH_SPEED,
+  PLAYER_FLY_SPEED,
+  PLAYER_FLY_VERTICAL_SPEED,
   PLAYER_GRAVITY,
   PLAYER_JUMP_SPEED,
   PLAYER_MAX_FALL_SPEED,
@@ -41,6 +44,8 @@ export class PlayerController {
     this.wishDir = new THREE.Vector3();
 
     this.lastForwardTapTime = -Infinity;
+    this.lastSpaceTapTime = -Infinity;
+    this.movementMode = "walk";
   }
 
   setPosition(x, y, z) {
@@ -60,16 +65,16 @@ export class PlayerController {
     return this.camera.getWorldDirection(target);
   }
 
-  update(delta) {
-    this.updateLook();
-    this.updateMovement(delta);
+  update(delta, allowInput = true) {
+    this.updateLook(allowInput);
+    this.updateMovement(delta, allowInput);
     this.updateEyeHeight(delta);
     this.body.position.copy(this.player.position);
   }
 
-  updateLook() {
+  updateLook(allowInput) {
     const mouse = this.input.consumeMouseDelta();
-    if (!this.input.locked) {
+    if (!allowInput || !this.input.locked) {
       return;
     }
 
@@ -81,10 +86,40 @@ export class PlayerController {
     this.pitchPivot.rotation.x = this.player.pitch;
   }
 
-  updateMovement(delta) {
+  updateMovement(delta, allowInput) {
+    if (!allowInput) {
+      this.input.consumeKeyPress("Space");
+      this.input.consumeKeyPress("KeyW");
+      this.player.velocity.set(0, 0, 0);
+      this.player.isSprinting = false;
+      if (this.player.isFlying) {
+        this.movementMode = "fly";
+      } else if (this.player.inWater) {
+        this.movementMode = "swim";
+      } else {
+        this.movementMode = "walk";
+      }
+      return;
+    }
+
     const moveX = Number(this.input.isKeyDown("KeyD")) - Number(this.input.isKeyDown("KeyA"));
     const moveZ = Number(this.input.isKeyDown("KeyW")) - Number(this.input.isKeyDown("KeyS"));
+    const jumpHeld = this.input.isKeyDown("Space");
     const wantsCrouch = this.input.isKeyDown("ShiftLeft") || this.input.isKeyDown("ShiftRight");
+    const spacePressed = this.input.consumeKeyPress("Space");
+
+    this.handleFlightToggle(spacePressed);
+
+    if (this.player.isFlying) {
+      this.player.inWater = false;
+      this.player.isSprinting = false;
+      this.player.isCrouching = false;
+      this.player.height = this.player.standHeight;
+      this.player.targetEyeHeight = this.player.standEyeHeight;
+      this.movementMode = "fly";
+      this.applyFlyMovement(moveX, moveZ, wantsCrouch, jumpHeld, delta);
+      return;
+    }
 
     this.updateCrouchState(wantsCrouch);
     this.updateSprintState(moveZ);
@@ -92,12 +127,32 @@ export class PlayerController {
     this.player.inWater = this.isBodyInWater();
     if (this.player.inWater) {
       this.player.isSprinting = false;
-      this.applyWaterMovement(moveX, moveZ, wantsCrouch, delta);
+      this.movementMode = "swim";
+      this.applyWaterMovement(moveX, moveZ, wantsCrouch, jumpHeld, delta);
     } else {
-      this.applyGroundMovement(moveX, moveZ, delta);
+      this.movementMode = "walk";
+      this.applyGroundMovement(moveX, moveZ, jumpHeld, delta);
     }
 
     this.player.inWater = this.isBodyInWater();
+    if (this.player.inWater && this.movementMode === "walk") {
+      this.movementMode = "swim";
+    }
+  }
+
+  handleFlightToggle(spacePressed) {
+    if (!spacePressed) {
+      return;
+    }
+    const now = performance.now() * 0.001;
+    if (now - this.lastSpaceTapTime <= FLIGHT_DOUBLE_TAP_WINDOW) {
+      this.player.isFlying = !this.player.isFlying;
+      this.player.isSprinting = false;
+      this.player.velocity.set(0, 0, 0);
+      this.lastSpaceTapTime = -Infinity;
+      return;
+    }
+    this.lastSpaceTapTime = now;
   }
 
   updateCrouchState(wantsCrouch) {
@@ -121,7 +176,7 @@ export class PlayerController {
     if (this.input.consumeKeyPress("KeyW")) {
       const now = performance.now() * 0.001;
       const quickDoubleTap = now - this.lastForwardTapTime <= SPRINT_DOUBLE_TAP_WINDOW;
-      if (quickDoubleTap && !this.player.isCrouching && !this.player.inWater) {
+      if (quickDoubleTap && !this.player.isCrouching && !this.player.inWater && !this.player.isFlying) {
         this.player.isSprinting = true;
       }
       this.lastForwardTapTime = now;
@@ -132,12 +187,11 @@ export class PlayerController {
     }
   }
 
-  applyGroundMovement(moveX, moveZ, delta) {
+  applyGroundMovement(moveX, moveZ, jumpHeld, delta) {
     const moveLen = Math.hypot(moveX, moveZ);
     const normX = moveLen > 0 ? moveX / moveLen : 0;
     const normZ = moveLen > 0 ? moveZ / moveLen : 0;
 
-    // Fixes W/S inversion: yaw=0 now maps W to camera forward (-Z).
     this.forward.set(-Math.sin(this.player.yaw), 0, -Math.cos(this.player.yaw));
     this.right.set(Math.cos(this.player.yaw), 0, -Math.sin(this.player.yaw));
     this.wishDir.set(0, 0, 0);
@@ -156,7 +210,7 @@ export class PlayerController {
     this.player.velocity.x = this.wishDir.x;
     this.player.velocity.z = this.wishDir.z;
 
-    if (this.player.onGround && this.input.consumeKeyPress("Space")) {
+    if (this.player.onGround && jumpHeld) {
       this.player.velocity.y = PLAYER_JUMP_SPEED;
       this.player.onGround = false;
     }
@@ -164,11 +218,12 @@ export class PlayerController {
     this.player.velocity.y -= PLAYER_GRAVITY * delta;
     this.player.velocity.y = Math.max(this.player.velocity.y, -PLAYER_MAX_FALL_SPEED);
 
-    const hit = this.moveAndCollide(
-      this.player.velocity.x * delta,
-      this.player.velocity.y * delta,
-      this.player.velocity.z * delta
-    );
+    let dx = this.player.velocity.x * delta;
+    let dz = this.player.velocity.z * delta;
+    const dy = this.player.velocity.y * delta;
+    ({ dx, dz } = this.applyCrouchEdgeProtection(dx, dz));
+
+    const hit = this.moveAndCollide(dx, dy, dz);
 
     if ((hit.x || hit.z) && this.player.isSprinting) {
       this.player.isSprinting = false;
@@ -178,7 +233,7 @@ export class PlayerController {
     }
   }
 
-  applyWaterMovement(moveX, moveZ, wantsCrouch, delta) {
+  applyWaterMovement(moveX, moveZ, wantsCrouch, jumpHeld, delta) {
     const moveLen = Math.hypot(moveX, moveZ);
     const normX = moveLen > 0 ? moveX / moveLen : 0;
     const normZ = moveLen > 0 ? moveZ / moveLen : 0;
@@ -198,20 +253,92 @@ export class PlayerController {
       this.player.velocity.z *= dragFactor;
     }
 
-    if (this.input.isKeyDown("Space")) {
-      this.player.velocity.y = PLAYER_SWIM_UP_SPEED;
+    if (jumpHeld) {
+      this.player.velocity.y = PLAYER_SWIM_UP_SPEED + 0.8;
     } else if (wantsCrouch) {
       this.player.velocity.y = -PLAYER_SWIM_DOWN_SPEED;
     } else {
-      this.player.velocity.y -= PLAYER_WATER_GRAVITY * delta;
-      this.player.velocity.y = Math.max(this.player.velocity.y, -PLAYER_SWIM_DOWN_SPEED);
+      this.player.velocity.y -= PLAYER_WATER_GRAVITY * delta * 0.75;
+      this.player.velocity.y = Math.max(this.player.velocity.y, -PLAYER_SWIM_DOWN_SPEED * 0.72);
     }
+
+    const hit = this.moveAndCollide(
+      this.player.velocity.x * delta,
+      this.player.velocity.y * delta,
+      this.player.velocity.z * delta
+    );
+
+    if (jumpHeld && (hit.x || hit.z)) {
+      this.tryWaterStepUp();
+    }
+  }
+
+  applyFlyMovement(moveX, moveZ, wantsDescend, wantsAscend, delta) {
+    const moveLen = Math.hypot(moveX, moveZ);
+    const normX = moveLen > 0 ? moveX / moveLen : 0;
+    const normZ = moveLen > 0 ? moveZ / moveLen : 0;
+
+    this.forward.set(-Math.sin(this.player.yaw), 0, -Math.cos(this.player.yaw));
+    this.right.set(Math.cos(this.player.yaw), 0, -Math.sin(this.player.yaw));
+    this.wishDir.set(0, 0, 0);
+    this.wishDir.addScaledVector(this.right, normX * PLAYER_FLY_SPEED);
+    this.wishDir.addScaledVector(this.forward, normZ * PLAYER_FLY_SPEED);
+
+    const up = (wantsAscend ? 1 : 0) - (wantsDescend ? 1 : 0);
+    this.player.velocity.x = this.wishDir.x;
+    this.player.velocity.z = this.wishDir.z;
+    this.player.velocity.y = up * PLAYER_FLY_VERTICAL_SPEED;
 
     this.moveAndCollide(
       this.player.velocity.x * delta,
       this.player.velocity.y * delta,
       this.player.velocity.z * delta
     );
+  }
+
+  applyCrouchEdgeProtection(dx, dz) {
+    if (!this.player.isCrouching || !this.player.onGround) {
+      return { dx, dz };
+    }
+
+    const p = this.player.position;
+    const nextX = p.x + dx;
+    const nextZ = p.z + dz;
+    if (this.hasGroundSupportAt(nextX, p.y, nextZ)) {
+      return { dx, dz };
+    }
+
+    if (this.hasGroundSupportAt(p.x + dx, p.y, p.z)) {
+      return { dx, dz: 0 };
+    }
+    if (this.hasGroundSupportAt(p.x, p.y, p.z + dz)) {
+      return { dx: 0, dz };
+    }
+    return { dx: 0, dz: 0 };
+  }
+
+  hasGroundSupportAt(px, py, pz) {
+    const probeY = py - 0.08;
+    const r = this.player.radius * 0.95;
+    const points = [
+      [0, 0],
+      [r, 0],
+      [-r, 0],
+      [0, r],
+      [0, -r],
+      [r, r],
+      [r, -r],
+      [-r, r],
+      [-r, -r],
+    ];
+
+    for (let i = 0; i < points.length; i += 1) {
+      const point = points[i];
+      if (isBlockSolid(this.world.getBlock(px + point[0], probeY, pz + point[1]))) {
+        return true;
+      }
+    }
+    return false;
   }
 
   moveAndCollide(dx, dy, dz) {
@@ -243,7 +370,7 @@ export class PlayerController {
       hit.y = true;
     }
 
-    if (!this.player.onGround && !this.player.inWater) {
+    if (!this.player.onGround && !this.player.inWater && !this.player.isFlying) {
       p.y -= GROUND_PROBE;
       if (this.collidesAt(p.x, p.y, p.z, this.player.height)) {
         this.player.onGround = true;
@@ -255,6 +382,20 @@ export class PlayerController {
     }
 
     return hit;
+  }
+
+  tryWaterStepUp() {
+    const p = this.player.position;
+    const oldY = p.y;
+    const stepHeight = 0.68;
+
+    p.y += stepHeight;
+    if (!this.collidesAt(p.x, p.y, p.z, this.player.height)) {
+      this.player.velocity.y = Math.max(this.player.velocity.y, 2.25);
+      return true;
+    }
+    p.y = oldY;
+    return false;
   }
 
   updateEyeHeight(delta) {
@@ -326,7 +467,12 @@ export class PlayerController {
       inWater: this.player.inWater,
       isSprinting: this.player.isSprinting,
       isCrouching: this.player.isCrouching,
+      isFlying: this.player.isFlying,
     };
+  }
+
+  getMovementMode() {
+    return this.movementMode;
   }
 
   wouldIntersectBlock(blockX, blockY, blockZ) {

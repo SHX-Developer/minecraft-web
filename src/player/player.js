@@ -25,5 +25,6 @@ export class Player {
     this.inWater = false;
     this.isCrouching = false;
     this.isSprinting = false;
+    this.isFlying = false;
   }
 }
