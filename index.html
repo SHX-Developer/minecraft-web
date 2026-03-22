@@ -1,19 +1,32 @@
 <!doctype html>
-<html lang="ru">
+<html lang="en">
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Minecraft-like Three.js Demo</title>
+    <title>VoxelCraft MVP</title>
     <link rel="stylesheet" href="./style.css" />
+    <script type="importmap">
+      {
+        "imports": {
+          "three": "https://unpkg.com/three@0.166.1/build/three.module.js"
+        }
+      }
+    </script>
   </head>
   <body>
     <canvas id="game-canvas"></canvas>
 
-    <div id="ui">
-      <div id="crosshair">+</div>
-      <div id="hint">Кликни по экрану для захвата мыши. WASD — движение, Space — прыжок.</div>
+    <div id="hud">
+      <div id="underwater-overlay" aria-hidden="true"></div>
+      <div id="crosshair" aria-hidden="true"></div>
+      <div id="hotbar" aria-label="Hotbar"></div>
+      <div id="hint">
+        Click to lock pointer. W/S forward-back, Shift crouch, double-tap W sprint, wheel or 1-9 select
+        block.
+      </div>
+      <div id="debug" aria-live="polite"></div>
     </div>
 
-    <script type="module" src="./main.js"></script>
+    <script type="module" src="./src/main.js"></script>
   </body>
 </html>
