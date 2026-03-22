@@ -9,6 +9,7 @@ async function bootstrap() {
   const inventoryCreativeGrid = document.getElementById("inventory-creative-grid");
   const inventoryStorageGrid = document.getElementById("inventory-storage-grid");
   const inventoryHotbar = document.getElementById("inventory-hotbar-grid");
+  const inventoryTrash = document.getElementById("inventory-trash-slot");
   const inventoryCursor = document.getElementById("inventory-cursor-item");
   const heldItemCanvas = document.getElementById("held-item-canvas");
 
@@ -21,12 +22,14 @@ async function bootstrap() {
     !inventoryCreativeGrid ||
     !inventoryStorageGrid ||
     !inventoryHotbar ||
+    !inventoryTrash ||
     !inventoryCursor ||
     !heldItemCanvas
   ) {
     throw new Error("Missing required DOM nodes.");
   }
 
+  const atlasUrl = `${new URL("../assets/textures/atlas.png", import.meta.url).href}?v=20260322b`;
   const game = new Game({
     canvas,
     hudHotbarRoot: hotbar,
@@ -36,8 +39,10 @@ async function bootstrap() {
     inventoryCreativeGrid,
     inventoryStorageGrid,
     inventoryHotbar,
+    inventoryTrash,
     inventoryCursor,
     heldItemCanvas,
+    atlasUrl,
   });
 
   await game.init();

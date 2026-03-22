@@ -3,7 +3,7 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>VoxelCraft MVP</title>
+    <title>SHX CRAFT</title>
     <link rel="stylesheet" href="./style.css" />
     <script type="importmap">
       {
@@ -28,24 +28,44 @@
             <span class="inventory-hint">E to close</span>
           </div>
           <div id="inventory-main">
+            <div id="inventory-left-decor">
+              <div id="inventory-armor-column">
+                <div class="armor-slot"></div>
+                <div class="armor-slot"></div>
+                <div class="armor-slot"></div>
+                <div class="armor-slot"></div>
+              </div>
+              <div id="inventory-player-preview"></div>
+            </div>
+            <div id="inventory-crafting-wrap">
+              <div class="inventory-section-title">Crafting</div>
+              <div id="inventory-crafting-placeholder">
+                <div id="craft-grid-2x2">
+                  <div class="craft-slot"></div>
+                  <div class="craft-slot"></div>
+                  <div class="craft-slot"></div>
+                  <div class="craft-slot"></div>
+                </div>
+                <div class="craft-arrow">→</div>
+                <div class="craft-result-slot"></div>
+              </div>
+            </div>
             <div id="inventory-creative">
-              <div class="inventory-section-title">Blocks</div>
+              <div class="inventory-section-title">Creative Blocks</div>
               <div id="inventory-creative-grid"></div>
             </div>
-            <div id="inventory-side">
-              <div class="inventory-section-title">Crafting (placeholder)</div>
-              <div id="inventory-crafting-placeholder">
-                <div class="craft-slot"></div>
-                <div class="craft-slot"></div>
-                <div class="craft-slot"></div>
-                <div class="craft-slot"></div>
-              </div>
-              <div class="inventory-section-title">Storage</div>
-              <div id="inventory-storage-grid"></div>
-            </div>
           </div>
-          <div class="inventory-section-title">Hotbar</div>
-          <div id="inventory-hotbar-grid"></div>
+          <div class="inventory-section-title">Storage</div>
+          <div id="inventory-storage-grid"></div>
+          <div id="inventory-bottom-row">
+            <div id="inventory-hotbar-wrap">
+              <div class="inventory-section-title">Hotbar</div>
+              <div id="inventory-hotbar-grid"></div>
+            </div>
+            <button id="inventory-trash-slot" type="button" title="Drop item here to delete">
+              🗑
+            </button>
+          </div>
         </div>
       </div>
       <div id="inventory-cursor-item" aria-hidden="true"></div>

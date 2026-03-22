@@ -61,21 +61,21 @@ export class WorldGenerator {
 
     if (lakeMask > 0.8) {
       const t = (lakeMask - 0.8) / 0.2;
-      basinDepth += 4 + t * 10;
-      localWaterLevel = WATER_LEVEL + 1 + t * 2;
+      basinDepth += 3 + t * 8;
+      localWaterLevel = WATER_LEVEL + t * 1.8;
       hasWaterBasin = true;
     }
 
-    if (puddleMask > 0.93) {
-      const t = (puddleMask - 0.93) / 0.07;
-      basinDepth += 1.2 + t * 2.5;
-      localWaterLevel = Math.max(localWaterLevel, WATER_LEVEL + t);
+    if (puddleMask > 0.95) {
+      const t = (puddleMask - 0.95) / 0.05;
+      basinDepth += 0.8 + t * 1.8;
+      localWaterLevel = Math.max(localWaterLevel, WATER_LEVEL - 1 + t * 1.2);
       hasWaterBasin = true;
     }
 
     let rawHeight = baseTerrain - basinDepth;
     const surfaceY = clamp(Math.floor(rawHeight), 2, CHUNK_SIZE_Y - 6);
-    localWaterLevel = clamp(Math.floor(localWaterLevel), WATER_LEVEL - 1, WATER_LEVEL + 3);
+    localWaterLevel = clamp(Math.floor(localWaterLevel), WATER_LEVEL - 1, WATER_LEVEL + 2);
 
     const moisture = valueNoise2D(worldX, worldZ, 52, this.seed + 514);
     const temperature = valueNoise2D(worldX, worldZ, 180, this.seed + 637);
@@ -168,8 +168,10 @@ export class WorldGenerator {
       chunk.set(lx, y, lz, blockId);
     }
 
-    // Fill water only for low basins; avoids random water layers above normal terrain.
-    if (hasWaterBasin && surfaceY < localWaterLevel) {
+    // Water is limited to terrain basins and very low natural depressions.
+    const shouldFillWater = hasWaterBasin || surfaceY <= WATER_LEVEL - 2;
+
+    if (shouldFillWater && surfaceY < localWaterLevel) {
       for (let y = surfaceY + 1; y <= localWaterLevel; y += 1) {
         if (chunk.get(lx, y, lz) === BLOCK.AIR) {
           chunk.set(lx, y, lz, BLOCK.WATER);
@@ -237,4 +239,3 @@ export class WorldGenerator {
     }
   }
 }
-

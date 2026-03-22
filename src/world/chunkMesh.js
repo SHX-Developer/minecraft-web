@@ -5,9 +5,11 @@ import {
   getAtlasUV,
   getBlockType,
   getFaceTile,
+  getTileByName,
   isBlockCube,
   isTorchBlock,
 } from "./blockTypes.js";
+import { getTorchParts } from "../items/torchParts.js";
 
 const FACES = [
   {
@@ -115,40 +117,6 @@ function shouldRenderFace(blockType, blockId, neighborId) {
   return neighborType.transparent;
 }
 
-function pushFaceWithBounds(buffers, min, max, face, uv) {
-  const baseIndex = buffers.vertexCount;
-
-  for (let i = 0; i < 4; i += 1) {
-    const corner = face.corners[i];
-    const vx = min[0] + (max[0] - min[0]) * corner[0];
-    const vy = min[1] + (max[1] - min[1]) * corner[1];
-    const vz = min[2] + (max[2] - min[2]) * corner[2];
-    buffers.positions.push(vx, vy, vz);
-    buffers.normals.push(face.normal[0], face.normal[1], face.normal[2]);
-  }
-
-  buffers.uvs.push(
-    uv.u1,
-    uv.v0,
-    uv.u1,
-    uv.v1,
-    uv.u0,
-    uv.v1,
-    uv.u0,
-    uv.v0
-  );
-
-  buffers.indices.push(
-    baseIndex,
-    baseIndex + 1,
-    baseIndex + 2,
-    baseIndex,
-    baseIndex + 2,
-    baseIndex + 3
-  );
-  buffers.vertexCount += 4;
-}
-
 function pushFace(buffers, lx, y, lz, face, uv) {
   const baseIndex = buffers.vertexCount;
 
@@ -180,62 +148,54 @@ function pushFace(buffers, lx, y, lz, face, uv) {
   buffers.vertexCount += 4;
 }
 
+function pushFaceWithBounds(buffers, min, max, face, uv) {
+  const baseIndex = buffers.vertexCount;
+  for (let i = 0; i < 4; i += 1) {
+    const corner = face.corners[i];
+    const vx = min[0] + (max[0] - min[0]) * corner[0];
+    const vy = min[1] + (max[1] - min[1]) * corner[1];
+    const vz = min[2] + (max[2] - min[2]) * corner[2];
+    buffers.positions.push(vx, vy, vz);
+    buffers.normals.push(face.normal[0], face.normal[1], face.normal[2]);
+  }
+
+  buffers.uvs.push(
+    uv.u1,
+    uv.v0,
+    uv.u1,
+    uv.v1,
+    uv.u0,
+    uv.v1,
+    uv.u0,
+    uv.v0
+  );
+
+  buffers.indices.push(
+    baseIndex,
+    baseIndex + 1,
+    baseIndex + 2,
+    baseIndex,
+    baseIndex + 2,
+    baseIndex + 3
+  );
+  buffers.vertexCount += 4;
+}
+
+function pushCuboid(buffers, min, max, uv) {
+  for (let i = 0; i < FACES.length; i += 1) {
+    pushFaceWithBounds(buffers, min, max, FACES[i], uv);
+  }
+}
+
 function pushTorch(buffers, lx, y, lz, blockId) {
-  const tile = getFaceTile(blockId, "top");
-  const uv = getAtlasUV(tile);
-
-  let minX = lx + 0.43;
-  let maxX = lx + 0.57;
-  let minY = y + 0.03;
-  let maxY = y + 0.74;
-  let minZ = lz + 0.43;
-  let maxZ = lz + 0.57;
-
-  if (blockId === BLOCK.TORCH_WEST) {
-    minX = lx + 0.12;
-    maxX = lx + 0.26;
-    minY = y + 0.24;
-    maxY = y + 0.92;
-  } else if (blockId === BLOCK.TORCH_EAST) {
-    minX = lx + 0.74;
-    maxX = lx + 0.88;
-    minY = y + 0.24;
-    maxY = y + 0.92;
-  } else if (blockId === BLOCK.TORCH_NORTH) {
-    minZ = lz + 0.12;
-    maxZ = lz + 0.26;
-    minY = y + 0.24;
-    maxY = y + 0.92;
-  } else if (blockId === BLOCK.TORCH_SOUTH) {
-    minZ = lz + 0.74;
-    maxZ = lz + 0.88;
-    minY = y + 0.24;
-    maxY = y + 0.92;
-  }
-
-  for (let i = 0; i < FACES.length; i += 1) {
-    pushFaceWithBounds(
+  const parts = getTorchParts(blockId);
+  for (let i = 0; i < parts.length; i += 1) {
+    const part = parts[i];
+    const uv = getAtlasUV(getTileByName(part.tile));
+    pushCuboid(
       buffers,
-      [minX, minY, minZ],
-      [maxX, maxY, maxZ],
-      FACES[i],
-      uv
-    );
-  }
-
-  const flameMinX = (minX + maxX) * 0.5 - 0.09;
-  const flameMaxX = (minX + maxX) * 0.5 + 0.09;
-  const flameMinY = maxY - 0.03;
-  const flameMaxY = maxY + 0.17;
-  const flameMinZ = (minZ + maxZ) * 0.5 - 0.09;
-  const flameMaxZ = (minZ + maxZ) * 0.5 + 0.09;
-
-  for (let i = 0; i < FACES.length; i += 1) {
-    pushFaceWithBounds(
-      buffers,
-      [flameMinX, flameMinY, flameMinZ],
-      [flameMaxX, flameMaxY, flameMaxZ],
-      FACES[i],
+      [lx + part.min[0], y + part.min[1], lz + part.min[2]],
+      [lx + part.max[0], y + part.max[1], lz + part.max[2]],
       uv
     );
   }

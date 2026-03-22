@@ -64,11 +64,11 @@ export const INVENTORY_STORAGE_SLOTS = 27;
 export const INVENTORY_COLUMNS = 9;
 export const INVENTORY_CREATIVE_COLUMNS = 9;
 export const INVENTORY_CREATIVE_ROWS = 6;
-export const TORCH_LIGHT_RADIUS = 10;
-export const TORCH_LIGHT_INTENSITY = 1.35;
+export const TORCH_LIGHT_RADIUS = 12;
+export const TORCH_LIGHT_INTENSITY = 2.0;
 export const TORCH_MAX_ACTIVE_LIGHTS = 22;
 
-export const MUSIC_VOLUME = 0.35;
+export const MUSIC_VOLUME = 0.25;
 export const MUSIC_TRACKS = [
   "./assets/audio/13. Aria Math.mp3",
   "./assets/audio/track1.mp3",

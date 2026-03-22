@@ -12,6 +12,10 @@ import { ANIMAL_TYPES } from "./animalTypes.js";
 const HIT_FLASH_DURATION = 0.12;
 const HIT_COLOR = new THREE.Color(0xff3333);
 
+function angleDelta(target, current) {
+  return Math.atan2(Math.sin(target - current), Math.cos(target - current));
+}
+
 export class AnimalManager {
   constructor(scene, world, particlesManager) {
     this.scene = scene;
@@ -133,6 +137,7 @@ export class AnimalManager {
       parts,
       hp: ANIMAL_HP,
       yaw: Math.random() * Math.PI * 2,
+      targetYaw: Math.random() * Math.PI * 2,
       wanderTimer: 0.6 + Math.random() * 2.4,
       hitFlash: 0,
       speedScale: 1,
@@ -199,7 +204,7 @@ export class AnimalManager {
     animal.wanderTimer -= delta;
     if (animal.wanderTimer <= 0) {
       animal.wanderTimer = 1.1 + Math.random() * 3.2;
-      animal.yaw += (Math.random() - 0.5) * 1.45;
+      animal.targetYaw += (Math.random() - 0.5) * 1.45;
     }
 
     if (animal.hitFlash > 0) {
@@ -212,16 +217,24 @@ export class AnimalManager {
       part.material.color.copy(part.userData.baseColor).lerp(HIT_COLOR, flashFactor);
     }
 
-    const baseSpeed = animal.def.speed * (animal.hitFlash > 0 ? 0.65 : 1);
-    let moveX = Math.cos(animal.yaw) * baseSpeed * delta + animal.hitKnockback.x * delta;
-    let moveZ = Math.sin(animal.yaw) * baseSpeed * delta + animal.hitKnockback.y * delta;
+    const turnSpeed = 3.4;
+    const yawStep = angleDelta(animal.targetYaw, animal.mesh.rotation.y);
+    const maxStep = turnSpeed * delta;
+    animal.mesh.rotation.y += Math.max(-maxStep, Math.min(maxStep, yawStep));
+    animal.yaw = animal.mesh.rotation.y;
+
+    const turnPenalty = Math.max(0.18, 1 - Math.min(1, Math.abs(yawStep) / 1.2));
+    const baseSpeed = animal.def.speed * (animal.hitFlash > 0 ? 0.65 : 1) * turnPenalty;
+    // Animal models are authored facing +Z, so forward movement must match that local forward.
+    let moveX = Math.sin(animal.mesh.rotation.y) * baseSpeed * delta + animal.hitKnockback.x * delta;
+    let moveZ = Math.cos(animal.mesh.rotation.y) * baseSpeed * delta + animal.hitKnockback.y * delta;
     animal.hitKnockback.multiplyScalar(Math.max(0, 1 - delta * 5));
 
     const nextX = animal.mesh.position.x + moveX;
     const nextZ = animal.mesh.position.z + moveZ;
     const walkResult = this.canMoveTo(animal, nextX, nextZ);
     if (!walkResult.ok) {
-      animal.yaw += (Math.random() - 0.5) * (Math.PI * 0.8);
+      animal.targetYaw += (Math.random() - 0.5) * (Math.PI * 0.8);
       animal.wanderTimer = 0.35 + Math.random() * 0.5;
       moveX = 0;
       moveZ = 0;
@@ -232,7 +245,6 @@ export class AnimalManager {
 
     const groundY = this.world.getSurfaceHeight(animal.mesh.position.x, animal.mesh.position.z);
     animal.mesh.position.y += ((groundY + 1) - animal.mesh.position.y) * Math.min(1, delta * 12);
-    animal.mesh.rotation.y += (animal.yaw - animal.mesh.rotation.y) * Math.min(1, delta * 6);
   }
 
   canMoveTo(animal, nextX, nextZ) {

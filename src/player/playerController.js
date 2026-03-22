@@ -289,11 +289,21 @@ export class PlayerController {
     this.player.velocity.z = this.wishDir.z;
     this.player.velocity.y = up * PLAYER_FLY_VERTICAL_SPEED;
 
-    this.moveAndCollide(
+    const hit = this.moveAndCollide(
       this.player.velocity.x * delta,
       this.player.velocity.y * delta,
       this.player.velocity.z * delta
     );
+
+    const touchingGround =
+      this.hasGroundSupportAt(this.player.position.x, this.player.position.y, this.player.position.z) &&
+      this.player.velocity.y <= 0;
+
+    if ((hit.y && this.player.velocity.y <= 0) || (touchingGround && !wantsAscend)) {
+      this.player.isFlying = false;
+      this.player.velocity.y = 0;
+      this.movementMode = "walk";
+    }
   }
 
   applyCrouchEdgeProtection(dx, dz) {

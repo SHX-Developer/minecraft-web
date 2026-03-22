@@ -29,11 +29,28 @@ import {
   isBlockSolid,
   isTorchBlock,
 } from "../world/blockTypes.js";
-import { createGeneratedAtlasTexture } from "../world/generatedAtlas.js";
 import { World } from "../world/world.js";
 import { createCamera } from "./camera.js";
 import { InputManager } from "./input.js";
 import { createRenderer, resizeRenderer } from "./renderer.js";
+
+function loadAtlasTexture(url) {
+  const loader = new THREE.TextureLoader();
+  return new Promise((resolve, reject) => {
+    loader.load(
+      url,
+      (texture) => {
+        texture.magFilter = THREE.NearestFilter;
+        texture.minFilter = THREE.NearestMipmapLinearFilter;
+        texture.generateMipmaps = true;
+        texture.colorSpace = THREE.SRGBColorSpace;
+        resolve(texture);
+      },
+      undefined,
+      reject
+    );
+  });
+}
 
 export class Game {
   constructor({
@@ -45,8 +62,10 @@ export class Game {
     inventoryCreativeGrid,
     inventoryStorageGrid,
     inventoryHotbar,
+    inventoryTrash,
     inventoryCursor,
     heldItemCanvas,
+    atlasUrl,
   }) {
     this.canvas = canvas;
     this.hudHotbarRoot = hudHotbarRoot;
@@ -56,8 +75,10 @@ export class Game {
     this.inventoryCreativeGrid = inventoryCreativeGrid;
     this.inventoryStorageGrid = inventoryStorageGrid;
     this.inventoryHotbar = inventoryHotbar;
+    this.inventoryTrash = inventoryTrash;
     this.inventoryCursor = inventoryCursor;
     this.heldItemCanvas = heldItemCanvas;
+    this.atlasUrl = atlasUrl;
 
     this.renderer = null;
     this.scene = null;
@@ -91,6 +112,7 @@ export class Game {
     this.placeCooldown = 0;
     this.onResize = () => resizeRenderer(this.renderer, this.camera);
     this.onUserGesture = null;
+    this.onInventoryKeyDown = null;
   }
 
   async init() {
@@ -100,7 +122,8 @@ export class Game {
     this.camera = createCamera();
     this.input = new InputManager(this.canvas);
 
-    const atlasTexture = createGeneratedAtlasTexture();
+    const atlasTexture = await loadAtlasTexture(this.atlasUrl);
+    atlasTexture.anisotropy = Math.min(4, this.renderer.capabilities.getMaxAnisotropy());
     this.world = new World(this.scene, atlasTexture);
     this.playerController = new PlayerController(this.camera, this.scene, this.world, this.input);
     this.inventoryUI = new InventoryUI({
@@ -109,7 +132,9 @@ export class Game {
       creativeGridElement: this.inventoryCreativeGrid,
       storageGridElement: this.inventoryStorageGrid,
       inventoryHotbarElement: this.inventoryHotbar,
+      trashElement: this.inventoryTrash,
       cursorElement: this.inventoryCursor,
+      atlasTexture,
     });
 
     this.dayNightCycle = new DayNightCycle(this.scene);
@@ -118,7 +143,7 @@ export class Game {
     this.particlesManager = new ParticlesManager(this.scene);
     this.animalManager = new AnimalManager(this.scene, this.world, this.particlesManager);
     this.torchLightSystem = new TorchLightSystem(this.scene, this.world);
-    this.heldItemRenderer = new HeldItemRenderer(this.heldItemCanvas);
+    this.heldItemRenderer = new HeldItemRenderer(this.heldItemCanvas, atlasTexture);
     this.musicManager = new MusicManager({
       tracks: MUSIC_TRACKS,
       volume: MUSIC_VOLUME,
@@ -150,6 +175,15 @@ export class Game {
       this.heldItemRenderer.setItem(this.inventoryUI.getSelectedBlockId());
     });
     this.heldItemRenderer.setItem(this.inventoryUI.getSelectedBlockId());
+
+    this.onInventoryKeyDown = (event) => {
+      if (event.code !== "KeyE" || event.repeat) {
+        return;
+      }
+      event.preventDefault();
+      this.toggleInventoryFromKey();
+    };
+    window.addEventListener("keydown", this.onInventoryKeyDown);
 
     this.setupAudioUnlock();
     window.addEventListener("resize", this.onResize);
@@ -187,7 +221,6 @@ export class Game {
   }
 
   update(delta) {
-    this.handleInventoryToggle();
     this.handleHotbarSelection();
 
     const controlsEnabled = this.input.locked && !this.inventoryUI.isOpen();
@@ -227,14 +260,16 @@ export class Game {
     this.updateDebug(delta);
   }
 
-  handleInventoryToggle() {
-    if (!this.input.consumeKeyPress("KeyE")) {
-      return;
-    }
-
+  toggleInventoryFromKey() {
+    // Prevent stale key press from being consumed in later update frames.
+    this.input.consumeKeyPress("KeyE");
     const opened = this.inventoryUI.toggle();
     if (opened && document.pointerLockElement) {
       document.exitPointerLock();
+      return;
+    }
+    if (!opened) {
+      this.input.requestPointerLock();
     }
   }
 
@@ -358,6 +393,9 @@ export class Game {
     }
 
     const selectedBlock = this.inventoryUI.getSelectedBlockId();
+    if (selectedBlock == null) {
+      return;
+    }
     const placeBlockId = this.resolvePlaceBlockId(selectedBlock, normal, placeX, placeY, placeZ);
     if (placeBlockId == null) {
       return;
@@ -503,6 +541,9 @@ export class Game {
   destroy() {
     this.running = false;
     window.removeEventListener("resize", this.onResize);
+    if (this.onInventoryKeyDown) {
+      window.removeEventListener("keydown", this.onInventoryKeyDown);
+    }
     if (this.onUserGesture) {
       window.removeEventListener("pointerdown", this.onUserGesture);
       window.removeEventListener("keydown", this.onUserGesture);

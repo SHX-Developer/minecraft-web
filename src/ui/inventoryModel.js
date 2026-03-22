@@ -50,7 +50,7 @@ export class InventoryModel {
   }
 
   getSelectedBlockId() {
-    return this.hotbarSlots[this.selectedHotbarIndex] ?? this.creativeSlots[0];
+    return this.hotbarSlots[this.selectedHotbarIndex] ?? null;
   }
 
   getSlot(kind, index) {
@@ -92,4 +92,3 @@ export class InventoryModel {
     return false;
   }
 }
-

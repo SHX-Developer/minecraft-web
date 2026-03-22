@@ -92,7 +92,6 @@ src/
     chunkMesh.js
     blockTypes.js
     worldGenerator.js
-    generatedAtlas.js
   player/
     player.js
     playerController.js
@@ -127,6 +126,8 @@ assets/
     atlas.png
   audio/
     .gitkeep
+tools/
+  generate_atlas.ps1
 README.md
 ```
 
@@ -137,4 +138,3 @@ README.md
 - No loot drops.
 - No persistent save/load.
 - No advanced AI/pathfinding.
-

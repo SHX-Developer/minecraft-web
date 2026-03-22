@@ -4,7 +4,7 @@ import {
   TORCH_LIGHT_RADIUS,
   TORCH_MAX_ACTIVE_LIGHTS,
 } from "../utils/constants.js";
-import { isTorchBlock } from "../world/blockTypes.js";
+import { BLOCK, isTorchBlock } from "../world/blockTypes.js";
 
 function blockKey(x, y, z) {
   return `${x},${y},${z}`;
@@ -32,7 +32,27 @@ export class TorchLightSystem {
       this.torchPositions.delete(key);
     }
     if (isTorchBlock(nextId)) {
-      this.torchPositions.set(key, { x: x + 0.5, y: y + 0.72, z: z + 0.5 });
+      let lx = 0.5;
+      let ly = 0.82;
+      let lz = 0.5;
+      if (nextId === BLOCK.TORCH_WEST) {
+        lx = 0.28;
+        ly = 0.86;
+      } else if (nextId === BLOCK.TORCH_EAST) {
+        lx = 0.72;
+        ly = 0.86;
+      } else if (nextId === BLOCK.TORCH_NORTH) {
+        lz = 0.28;
+        ly = 0.86;
+      } else if (nextId === BLOCK.TORCH_SOUTH) {
+        lz = 0.72;
+        ly = 0.86;
+      }
+      this.torchPositions.set(key, {
+        x: x + lx,
+        y: y + ly,
+        z: z + lz,
+      });
     }
   }
 

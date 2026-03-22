@@ -60,6 +60,8 @@ const TILE_BY_NAME = Object.freeze({
   bookshelf_side: { x: 4, y: 2 },
   bookshelf_top: { x: 5, y: 2 },
   obsidian: { x: 6, y: 2 },
+  torch_stick: { x: 7, y: 2 },
+  torch_head: { x: 0, y: 3 },
 });
 
 const BLOCK_DEFS = Object.freeze({
@@ -473,6 +475,10 @@ export function getFaceTile(id, faceName) {
   }
   const textureName = textures[faceName] || textures.side || textures.all || "dirt";
   return TILE_BY_NAME[textureName] || TILE_BY_NAME.dirt;
+}
+
+export function getTileByName(name) {
+  return TILE_BY_NAME[name] || TILE_BY_NAME.dirt;
 }
 
 export function getAtlasUV(tile) {

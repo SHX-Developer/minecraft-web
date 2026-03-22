@@ -2,15 +2,17 @@ import * as THREE from "three";
 import { createItemDisplayMesh } from "../items/itemMeshFactory.js";
 
 export class ItemPreviewCache {
-  constructor(size = 48) {
+  constructor(size = 48, atlasTexture = null) {
     this.size = size;
+    this.atlasTexture = atlasTexture;
     this.cache = new Map();
 
     this.canvas = document.createElement("canvas");
     this.renderer = new THREE.WebGLRenderer({
       canvas: this.canvas,
       alpha: true,
-      antialias: true,
+      antialias: false,
+      preserveDrawingBuffer: true,
       powerPreference: "high-performance",
     });
     this.renderer.setPixelRatio(1);
@@ -19,8 +21,8 @@ export class ItemPreviewCache {
     this.renderer.setClearColor(0x000000, 0);
 
     this.scene = new THREE.Scene();
-    this.camera = new THREE.PerspectiveCamera(42, 1, 0.01, 10);
-    this.camera.position.set(1.6, 1.4, 1.6);
+    this.camera = new THREE.PerspectiveCamera(38, 1, 0.01, 10);
+    this.camera.position.set(1.8, 1.55, 1.8);
     this.camera.lookAt(0, 0, 0);
 
     this.lightA = new THREE.AmbientLight(0xffffff, 0.72);
@@ -34,8 +36,15 @@ export class ItemPreviewCache {
       return this.cache.get(blockId);
     }
 
-    const mesh = createItemDisplayMesh(blockId);
-    mesh.rotation.set(-0.38, 0.74, 0.05);
+    const mesh = createItemDisplayMesh(blockId, this.atlasTexture);
+    const kind = mesh.userData.itemKind || "block";
+    if (kind === "torch") {
+      mesh.rotation.set(-0.26, 0.64, 0.02);
+      mesh.position.set(0, -0.08, 0);
+    } else {
+      mesh.rotation.set(-0.44, 0.78, 0.05);
+      mesh.position.set(0, -0.02, 0);
+    }
     this.scene.add(mesh);
     this.renderer.render(this.scene, this.camera);
     const dataUrl = this.canvas.toDataURL("image/png");
@@ -69,4 +78,3 @@ export class ItemPreviewCache {
     this.cache.clear();
   }
 }
-

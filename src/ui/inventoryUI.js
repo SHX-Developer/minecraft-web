@@ -9,17 +9,20 @@ export class InventoryUI {
     creativeGridElement,
     storageGridElement,
     inventoryHotbarElement,
+    trashElement,
     cursorElement,
+    atlasTexture,
   }) {
     this.hudHotbarRoot = hudHotbarRoot;
     this.overlayElement = overlayElement;
     this.creativeGridElement = creativeGridElement;
     this.storageGridElement = storageGridElement;
     this.inventoryHotbarElement = inventoryHotbarElement;
+    this.trashElement = trashElement;
     this.cursorElement = cursorElement;
 
     this.model = new InventoryModel();
-    this.previewCache = new ItemPreviewCache(52);
+    this.previewCache = new ItemPreviewCache(52, atlasTexture);
     this.cursorItem = null;
     this.isOpenState = false;
     this.changeListeners = new Set();
@@ -32,6 +35,15 @@ export class InventoryUI {
       this.mouseX = event.clientX;
       this.mouseY = event.clientY;
       this.updateCursor();
+    };
+    this.onTrashPointerDown = (event) => {
+      event.preventDefault();
+      event.stopPropagation();
+      if (this.cursorItem == null) {
+        return;
+      }
+      this.cursorItem = null;
+      this.refresh();
     };
 
     this.build();
@@ -54,6 +66,11 @@ export class InventoryUI {
     this.storageGridElement.innerHTML = "";
     this.inventoryHotbarElement.innerHTML = "";
     this.slotBindings.length = 0;
+
+    if (this.trashElement) {
+      this.trashElement.removeEventListener("pointerdown", this.onTrashPointerDown);
+      this.trashElement.addEventListener("pointerdown", this.onTrashPointerDown);
+    }
 
     for (let i = 0; i < this.model.hotbarSlots.length; i += 1) {
       this.bindSlot("hotbar", i, this.hudHotbarRoot, "hud");
@@ -147,6 +164,10 @@ export class InventoryUI {
 
     this.updateCursor();
     this.emitChange();
+
+    if (this.trashElement) {
+      this.trashElement.classList.toggle("ready", this.cursorItem != null);
+    }
   }
 
   updateCursor() {
@@ -223,13 +244,17 @@ export class InventoryUI {
   }
 
   getSelectedBlockName() {
-    return getBlockDisplayName(this.getSelectedBlockId());
+    const id = this.getSelectedBlockId();
+    return id == null ? "empty" : getBlockDisplayName(id);
   }
 
   destroy() {
     document.body.classList.remove("inventory-open");
     this.unsubscribeModel();
     window.removeEventListener("pointermove", this.onMouseMove);
+    if (this.trashElement) {
+      this.trashElement.removeEventListener("pointerdown", this.onTrashPointerDown);
+    }
     this.previewCache.destroy();
   }
 }
