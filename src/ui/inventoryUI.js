@@ -7,6 +7,8 @@ export class InventoryUI {
     hudHotbarRoot,
     overlayElement,
     creativeGridElement,
+    creativeToggleElement,
+    creativePanelElement,
     storageGridElement,
     inventoryHotbarElement,
     trashElement,
@@ -16,19 +18,22 @@ export class InventoryUI {
     this.hudHotbarRoot = hudHotbarRoot;
     this.overlayElement = overlayElement;
     this.creativeGridElement = creativeGridElement;
+    this.creativeToggleElement = creativeToggleElement;
+    this.creativePanelElement = creativePanelElement;
     this.storageGridElement = storageGridElement;
     this.inventoryHotbarElement = inventoryHotbarElement;
     this.trashElement = trashElement;
     this.cursorElement = cursorElement;
 
     this.model = new InventoryModel();
-    this.previewCache = new ItemPreviewCache(96, atlasTexture);
+    this.previewCache = new ItemPreviewCache(128, atlasTexture);
     this.cursorItem = null;
     this.isOpenState = false;
     this.changeListeners = new Set();
     this.slotBindings = [];
     this.mouseX = 0;
     this.mouseY = 0;
+    this.isCreativePanelOpen = false;
 
     this.unsubscribeModel = this.model.onChange(() => this.refresh());
     this.onMouseMove = (event) => {
@@ -44,6 +49,11 @@ export class InventoryUI {
       }
       this.cursorItem = null;
       this.refresh();
+    };
+    this.onCreativeToggleClick = (event) => {
+      event.preventDefault();
+      event.stopPropagation();
+      this.setCreativePanelOpen(!this.isCreativePanelOpen);
     };
 
     this.build();
@@ -71,6 +81,10 @@ export class InventoryUI {
       this.trashElement.removeEventListener("pointerdown", this.onTrashPointerDown);
       this.trashElement.addEventListener("pointerdown", this.onTrashPointerDown);
     }
+    if (this.creativeToggleElement) {
+      this.creativeToggleElement.removeEventListener("click", this.onCreativeToggleClick);
+      this.creativeToggleElement.addEventListener("click", this.onCreativeToggleClick);
+    }
 
     for (let i = 0; i < this.model.hotbarSlots.length; i += 1) {
       this.bindSlot("hotbar", i, this.hudHotbarRoot, "hud");
@@ -85,7 +99,18 @@ export class InventoryUI {
       this.bindSlot("creative", i, this.creativeGridElement, "creative");
     }
 
+    this.setCreativePanelOpen(false);
     this.refresh();
+  }
+
+  setCreativePanelOpen(open) {
+    this.isCreativePanelOpen = Boolean(open);
+    if (this.creativePanelElement) {
+      this.creativePanelElement.classList.toggle("open", this.isCreativePanelOpen);
+    }
+    if (this.creativeToggleElement) {
+      this.creativeToggleElement.classList.toggle("active", this.isCreativePanelOpen);
+    }
   }
 
   bindSlot(kind, index, parent, roleClass) {
@@ -254,6 +279,9 @@ export class InventoryUI {
     window.removeEventListener("pointermove", this.onMouseMove);
     if (this.trashElement) {
       this.trashElement.removeEventListener("pointerdown", this.onTrashPointerDown);
+    }
+    if (this.creativeToggleElement) {
+      this.creativeToggleElement.removeEventListener("click", this.onCreativeToggleClick);
     }
     this.previewCache.destroy();
   }

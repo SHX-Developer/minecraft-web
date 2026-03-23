@@ -8,11 +8,11 @@ export const WORLD_RENDER_RADIUS = 4;
 export const WORLD_UNLOAD_RADIUS = WORLD_RENDER_RADIUS + 2;
 export const CHUNK_LOADS_PER_FRAME = 1;
 export const CHUNK_REBUILDS_PER_FRAME = 1;
-export const WATER_LEVEL = 12;
+export const WATER_LEVEL = 10;
 
 export const ATLAS_COLUMNS = 8;
 export const ATLAS_ROWS = 8;
-export const HOTBAR_BLOCK_IDS = [1, 2, 3, 4, 5, 6, 7, 8, 9];
+export const HOTBAR_BLOCK_IDS = [2, 3, 4, 14, 7, 8, 12, 13, 11];
 export const ACTION_REPEAT_INTERVAL = 0.25;
 
 export const PLAYER_STAND_HEIGHT = 1.8;
@@ -66,15 +66,18 @@ export const INVENTORY_STORAGE_SLOTS = 27;
 export const INVENTORY_COLUMNS = 9;
 export const INVENTORY_CREATIVE_COLUMNS = 9;
 export const INVENTORY_CREATIVE_ROWS = 6;
-export const TORCH_LIGHT_RADIUS = 12;
-export const TORCH_LIGHT_INTENSITY = 2.0;
-export const TORCH_MAX_ACTIVE_LIGHTS = 8;
+export const TORCH_LIGHT_RADIUS = 22;
+export const TORCH_LIGHT_INTENSITY = 4.6;
+export const TORCH_MAX_ACTIVE_LIGHTS = 16;
 
 export const MUSIC_VOLUME = 0.25;
 export const MUSIC_TRACKS = [
-  "./assets/audio/13. Aria Math.mp3",
   "./assets/audio/track1.mp3",
   "./assets/audio/track2.mp3",
+  "./assets/audio/track3.mp3",
+  "./assets/audio/track4.mp3",
+  "./assets/audio/track5.mp3",
+  "./assets/audio/track6.mp3",
 ];
 export const SFX_MASTER_VOLUME = 0.5;
 export const SFX_BREAK_VOLUME = 0.5;

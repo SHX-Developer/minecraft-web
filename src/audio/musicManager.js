@@ -50,7 +50,15 @@ export class MusicManager {
     if (this.playlist.length === 0) {
       return;
     }
-    this.currentIndex = (this.currentIndex + 1) % this.playlist.length;
+    if (this.playlist.length === 1) {
+      this.currentIndex = 0;
+    } else {
+      let nextIndex = this.currentIndex;
+      while (nextIndex === this.currentIndex) {
+        nextIndex = Math.floor(Math.random() * this.playlist.length);
+      }
+      this.currentIndex = nextIndex;
+    }
     await this.playCurrent();
   }
 

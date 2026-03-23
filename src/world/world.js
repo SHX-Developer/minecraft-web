@@ -38,9 +38,17 @@ export class World {
       map: atlasTexture,
       transparent: true,
       opacity: 0.62,
-      depthWrite: false,
+      depthWrite: true,
       depthTest: true,
       side: THREE.FrontSide,
+    });
+    this.emissiveMaterial = new THREE.MeshBasicMaterial({
+      map: atlasTexture,
+      transparent: true,
+      opacity: 0.78,
+      depthWrite: false,
+      depthTest: true,
+      blending: THREE.AdditiveBlending,
     });
 
     this.chunkHalfExtents = new THREE.Vector3(CHUNK_SIZE_X * 0.5, CHUNK_SIZE_Y * 0.5, CHUNK_SIZE_Z * 0.5);
@@ -153,6 +161,7 @@ export class World {
       group,
       opaqueMesh: null,
       transparentMesh: null,
+      emissiveMesh: null,
     };
     this.chunks.set(key, entry);
 
@@ -252,6 +261,11 @@ export class World {
       entry.transparentMesh.geometry.dispose();
       entry.transparentMesh = null;
     }
+    if (entry.emissiveMesh) {
+      entry.group.remove(entry.emissiveMesh);
+      entry.emissiveMesh.geometry.dispose();
+      entry.emissiveMesh = null;
+    }
 
     const meshes = buildChunkMeshes(entry.chunk, this);
     if (meshes.opaqueGeometry) {
@@ -268,6 +282,14 @@ export class World {
       transparentMesh.renderOrder = 1;
       entry.group.add(transparentMesh);
       entry.transparentMesh = transparentMesh;
+    }
+
+    if (meshes.emissiveGeometry) {
+      const emissiveMesh = new THREE.Mesh(meshes.emissiveGeometry, this.emissiveMaterial);
+      emissiveMesh.frustumCulled = true;
+      emissiveMesh.renderOrder = 2;
+      entry.group.add(emissiveMesh);
+      entry.emissiveMesh = emissiveMesh;
     }
   }
 
@@ -290,6 +312,9 @@ export class World {
     }
     if (entry.transparentMesh) {
       entry.transparentMesh.geometry.dispose();
+    }
+    if (entry.emissiveMesh) {
+      entry.emissiveMesh.geometry.dispose();
     }
     this.scene.remove(entry.group);
   }

@@ -1,7 +1,7 @@
 import * as THREE from "three";
 import {
-  BLOCK,
   getAtlasUV,
+  getBlockType,
   getFaceTile,
   getTileByName,
   isTorchBlock,
@@ -53,9 +53,9 @@ function createTexturedBox(size, tileName, atlasTexture) {
   return new THREE.Mesh(geometry, material);
 }
 
-function createTorchMesh(atlasTexture) {
+function createTorchMesh(blockId, atlasTexture) {
   const group = new THREE.Group();
-  const parts = getTorchParts(BLOCK.TORCH);
+  const parts = getTorchParts(blockId);
 
   for (let i = 0; i < parts.length; i += 1) {
     const part = parts[i];
@@ -76,14 +76,45 @@ function createTorchMesh(atlasTexture) {
   return group;
 }
 
+function createCrossMesh(blockId, atlasTexture) {
+  const group = new THREE.Group();
+  const material = new THREE.MeshLambertMaterial({
+    map: atlasTexture,
+    transparent: true,
+    alphaTest: 0.05,
+    side: THREE.DoubleSide,
+  });
+  const geometry = new THREE.PlaneGeometry(0.92, 0.92);
+  const uv = getAtlasUV(getFaceTile(blockId, "front"));
+  const attr = geometry.getAttribute("uv");
+  attr.setXY(0, uv.u1, uv.v0);
+  attr.setXY(1, uv.u1, uv.v1);
+  attr.setXY(2, uv.u0, uv.v1);
+  attr.setXY(3, uv.u0, uv.v0);
+  attr.needsUpdate = true;
+
+  const planeA = new THREE.Mesh(geometry, material);
+  const planeB = new THREE.Mesh(geometry.clone(), material.clone());
+  planeA.rotation.y = Math.PI * 0.25;
+  planeB.rotation.y = -Math.PI * 0.25;
+  group.add(planeA, planeB);
+  group.userData.itemKind = "plant";
+  group.position.y = -0.06;
+  group.scale.setScalar(1.02);
+  return group;
+}
+
 export function createItemDisplayMesh(blockId, atlasTexture) {
   if (!atlasTexture || blockId == null) {
     const empty = new THREE.Group();
     empty.userData.itemKind = "empty";
     return empty;
   }
-  if (isTorchBlock(blockId) || blockId === BLOCK.TORCH) {
-    return createTorchMesh(atlasTexture);
+  if (isTorchBlock(blockId)) {
+    return createTorchMesh(blockId, atlasTexture);
+  }
+  if (getBlockType(blockId).shape === "cross") {
+    return createCrossMesh(blockId, atlasTexture);
   }
   return createCubeMesh(blockId, atlasTexture);
 }

@@ -18,29 +18,35 @@ export class HeldItemRenderer {
     this.renderer.setSize(canvas.clientWidth || 220, canvas.clientHeight || 220, false);
 
     this.scene = new THREE.Scene();
-    this.camera = new THREE.PerspectiveCamera(35, 1, 0.01, 12);
-    this.camera.position.set(1.55, 0.88, 2.05);
-    this.camera.lookAt(0, 0, 0);
+    this.camera = new THREE.PerspectiveCamera(50, 1, 0.01, 12);
+    this.camera.position.set(0, 0, 2.72);
+    this.camera.lookAt(0.35, -0.38, 0.12);
 
-    this.ambient = new THREE.AmbientLight(0xffffff, 0.9);
-    this.dir = new THREE.DirectionalLight(0xffffff, 0.92);
-    this.dir.position.set(2.5, 3, 2);
+    this.ambient = new THREE.AmbientLight(0xffffff, 0.96);
+    this.dir = new THREE.DirectionalLight(0xffffff, 1.2);
+    this.dir.position.set(2.2, 3.2, 2.25);
     this.scene.add(this.ambient, this.dir);
 
     this.handGroup = new THREE.Group();
+    this.baseHandPosition = new THREE.Vector3(0.96, -0.98, 0.06);
+    this.baseHandRotation = new THREE.Euler(-0.78, 0.14, 0.42);
+    this.handGroup.position.copy(this.baseHandPosition);
+    this.handGroup.rotation.copy(this.baseHandRotation);
+
     const armMaterial = new THREE.MeshLambertMaterial({ color: 0xd8b89b });
-    const sleeveMaterial = new THREE.MeshLambertMaterial({ color: 0x5a708f });
-    const hand = new THREE.Mesh(new THREE.BoxGeometry(0.42, 0.98, 0.42), armMaterial);
-    hand.position.set(0.82, -0.72, 0.32);
-    hand.rotation.set(-0.44, 0.18, 0.08);
-    const sleeve = new THREE.Mesh(new THREE.BoxGeometry(0.46, 0.42, 0.46), sleeveMaterial);
-    sleeve.position.set(0.76, -0.52, 0.3);
-    sleeve.rotation.copy(hand.rotation);
-    this.handGroup.add(hand, sleeve);
+    const sleeveMaterial = new THREE.MeshLambertMaterial({ color: 0x4a6387 });
+    const sleeve = new THREE.Mesh(new THREE.BoxGeometry(0.44, 1.08, 0.44), sleeveMaterial);
+    sleeve.position.set(0, -0.52, 0);
+    const hand = new THREE.Mesh(new THREE.BoxGeometry(0.38, 0.82, 0.38), armMaterial);
+    hand.position.set(0, 0.3, 0);
+    this.handGroup.add(sleeve, hand);
     this.scene.add(this.handGroup);
 
     this.currentBlockId = null;
     this.currentMesh = null;
+    this.currentMeshBaseRotation = new THREE.Euler();
+    this.currentMeshBasePosition = new THREE.Vector3();
+    this.currentMeshBaseScale = 1;
     this.time = 0;
     this.visible = true;
   }
@@ -63,15 +69,22 @@ export class HeldItemRenderer {
 
     this.currentMesh = createItemDisplayMesh(blockId, this.atlasTexture);
     const kind = this.currentMesh.userData.itemKind || "block";
-    if (kind === "torch") {
-      this.currentMesh.rotation.set(-0.14, 0.46, -0.1);
-      this.currentMesh.position.set(0.38, -0.42, -0.02);
-      this.currentMesh.scale.setScalar(1.28);
+    if (kind === "plant") {
+      this.currentMeshBaseRotation.set(-0.34, 0.72, 0.05);
+      this.currentMeshBasePosition.set(0.04, 0.86, -0.06);
+      this.currentMeshBaseScale = 0.9;
+    } else if (kind === "torch") {
+      this.currentMeshBaseRotation.set(-0.64, 0.4, -0.02);
+      this.currentMeshBasePosition.set(0.06, 0.85, -0.06);
+      this.currentMeshBaseScale = 0.88;
     } else {
-      this.currentMesh.rotation.set(-0.22, 0.86, 0.08);
-      this.currentMesh.position.set(0.34, -0.36, -0.06);
-      this.currentMesh.scale.setScalar(1.08);
+      this.currentMeshBaseRotation.set(-0.48, 0.76, 0.05);
+      this.currentMeshBasePosition.set(0.08, 0.8, -0.04);
+      this.currentMeshBaseScale = 0.86;
     }
+    this.currentMesh.rotation.copy(this.currentMeshBaseRotation);
+    this.currentMesh.position.copy(this.currentMeshBasePosition);
+    this.currentMesh.scale.setScalar(this.currentMeshBaseScale);
     this.handGroup.add(this.currentMesh);
   }
 
@@ -86,18 +99,29 @@ export class HeldItemRenderer {
     }
     this.time += delta;
 
-    const sway = isSprinting ? 0.11 : 0.06;
-    this.handGroup.position.y = Math.sin(this.time * 4.5) * sway;
-    this.handGroup.rotation.y = Math.sin(this.time * 2.1) * 0.05;
+    const bob = Math.sin(this.time * 5.8) * (isSprinting ? 0.05 : 0.022);
+    this.handGroup.position.set(
+      this.baseHandPosition.x,
+      this.baseHandPosition.y + bob,
+      this.baseHandPosition.z
+    );
+    this.handGroup.rotation.set(
+      this.baseHandRotation.x + Math.cos(this.time * 3.2) * (isSprinting ? 0.045 : 0.015),
+      this.baseHandRotation.y + Math.sin(this.time * 2.4) * 0.02,
+      this.baseHandRotation.z + Math.sin(this.time * 2.2) * (isSprinting ? 0.035 : 0.012)
+    );
 
     if (this.currentMesh) {
-      if (this.currentMesh.userData.itemKind === "torch") {
-        this.currentMesh.rotation.y = 0.36 + Math.sin(this.time * 2.2) * 0.04;
-        this.currentMesh.rotation.x = -0.08 + Math.sin(this.time * 3.2) * 0.02;
-      } else {
-        this.currentMesh.rotation.y = 0.8 + Math.sin(this.time * 2.1) * 0.06;
-        this.currentMesh.rotation.x = -0.2 + Math.sin(this.time * 3.2) * 0.025;
-      }
+      this.currentMesh.position.set(
+        this.currentMeshBasePosition.x,
+        this.currentMeshBasePosition.y + Math.sin(this.time * 4.2) * 0.01,
+        this.currentMeshBasePosition.z
+      );
+      this.currentMesh.rotation.set(
+        this.currentMeshBaseRotation.x + Math.sin(this.time * 3.4) * 0.01,
+        this.currentMeshBaseRotation.y + Math.sin(this.time * 2.7) * 0.016,
+        this.currentMeshBaseRotation.z
+      );
     }
 
     this.renderer.render(this.scene, this.camera);

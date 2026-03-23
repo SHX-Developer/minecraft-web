@@ -21,7 +21,7 @@ export class DayNightCycle {
   constructor(scene) {
     this.scene = scene;
     this.cycleDuration = DAY_DURATION_SECONDS + NIGHT_DURATION_SECONDS;
-    this.time = 0;
+    this.time = this.cycleDuration * 0.5;
     this.orbitRadius = 320;
     this.skyElevation = 88;
     this.worldAzimuth = 0.42;
@@ -142,9 +142,9 @@ export class DayNightCycle {
     this.sunFactor = clamp(sunElevation * 1.17 + 0.05, 0, 1);
     this.moonFactor = clamp(-sunElevation * 0.67, 0, 0.67);
 
-    this.sunLight.intensity = this.sunFactor * 1.2;
-    this.moonLight.intensity = this.moonFactor * 0.95;
-    this.ambientLight.intensity = 0.1 + this.sunFactor * 0.62;
+    this.sunLight.intensity = this.sunFactor * 1.62;
+    this.moonLight.intensity = this.moonFactor * 0.86;
+    this.ambientLight.intensity = 0.3 + this.sunFactor * 0.92;
 
     const twilight = clamp(1 - Math.abs(sunElevation) * 3.2, 0, 1);
     this.currentSkyColor.copy(NIGHT_SKY).lerp(DAY_SKY, this.sunFactor);

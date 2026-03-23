@@ -7,6 +7,8 @@ async function bootstrap() {
   const underwaterOverlay = document.getElementById("underwater-overlay");
   const inventoryOverlay = document.getElementById("inventory-overlay");
   const inventoryCreativeGrid = document.getElementById("inventory-creative-grid");
+  const inventoryCreativeToggle = document.getElementById("inventory-creative-toggle");
+  const inventoryCreativePanel = document.getElementById("inventory-creative-panel");
   const inventoryStorageGrid = document.getElementById("inventory-storage-grid");
   const inventoryHotbar = document.getElementById("inventory-hotbar-grid");
   const inventoryTrash = document.getElementById("inventory-trash-slot");
@@ -20,6 +22,8 @@ async function bootstrap() {
     !underwaterOverlay ||
     !inventoryOverlay ||
     !inventoryCreativeGrid ||
+    !inventoryCreativeToggle ||
+    !inventoryCreativePanel ||
     !inventoryStorageGrid ||
     !inventoryHotbar ||
     !inventoryTrash ||
@@ -38,6 +42,8 @@ async function bootstrap() {
     underwaterOverlay,
     inventoryOverlay,
     inventoryCreativeGrid,
+    inventoryCreativeToggle,
+    inventoryCreativePanel,
     inventoryStorageGrid,
     inventoryHotbar,
     inventoryTrash,

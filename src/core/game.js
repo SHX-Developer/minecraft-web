@@ -61,6 +61,8 @@ export class Game {
     underwaterOverlay,
     inventoryOverlay,
     inventoryCreativeGrid,
+    inventoryCreativeToggle,
+    inventoryCreativePanel,
     inventoryStorageGrid,
     inventoryHotbar,
     inventoryTrash,
@@ -74,6 +76,8 @@ export class Game {
     this.underwaterOverlay = underwaterOverlay;
     this.inventoryOverlay = inventoryOverlay;
     this.inventoryCreativeGrid = inventoryCreativeGrid;
+    this.inventoryCreativeToggle = inventoryCreativeToggle;
+    this.inventoryCreativePanel = inventoryCreativePanel;
     this.inventoryStorageGrid = inventoryStorageGrid;
     this.inventoryHotbar = inventoryHotbar;
     this.inventoryTrash = inventoryTrash;
@@ -131,6 +135,8 @@ export class Game {
       hudHotbarRoot: this.hudHotbarRoot,
       overlayElement: this.inventoryOverlay,
       creativeGridElement: this.inventoryCreativeGrid,
+      creativeToggleElement: this.inventoryCreativeToggle,
+      creativePanelElement: this.inventoryCreativePanel,
       storageGridElement: this.inventoryStorageGrid,
       inventoryHotbarElement: this.inventoryHotbar,
       trashElement: this.inventoryTrash,
@@ -416,31 +422,7 @@ export class Game {
   }
 
   resolvePlaceBlockId(selectedBlockId, normal, placeX, placeY, placeZ) {
-    if (selectedBlockId !== BLOCK.TORCH) {
-      return selectedBlockId;
-    }
-
-    if (normal.y === 1) {
-      const support = this.world.getBlock(placeX, placeY - 1, placeZ);
-      return isBlockSolid(support) ? BLOCK.TORCH : null;
-    }
-    if (normal.x === 1) {
-      const support = this.world.getBlock(placeX - 1, placeY, placeZ);
-      return isBlockSolid(support) ? BLOCK.TORCH_WEST : null;
-    }
-    if (normal.x === -1) {
-      const support = this.world.getBlock(placeX + 1, placeY, placeZ);
-      return isBlockSolid(support) ? BLOCK.TORCH_EAST : null;
-    }
-    if (normal.z === 1) {
-      const support = this.world.getBlock(placeX, placeY, placeZ - 1);
-      return isBlockSolid(support) ? BLOCK.TORCH_NORTH : null;
-    }
-    if (normal.z === -1) {
-      const support = this.world.getBlock(placeX, placeY, placeZ + 1);
-      return isBlockSolid(support) ? BLOCK.TORCH_SOUTH : null;
-    }
-    return null;
+    return selectedBlockId;
   }
 
   cleanupUnsupportedTorchesAround(worldX, worldY, worldZ) {

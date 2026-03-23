@@ -18,6 +18,17 @@ function hash2D(x, z, seed) {
   return (h >>> 0) / 4294967295;
 }
 
+function hash3D(x, y, z, seed) {
+  const ax = Math.imul(x, 374761393);
+  const ay = Math.imul(y, 668265263);
+  const az = Math.imul(z, 2147483647);
+  const as = Math.imul(seed, 1274126177);
+  let h = ax ^ ay ^ az ^ as;
+  h = Math.imul(h ^ (h >>> 13), 1274126177);
+  h ^= h >>> 16;
+  return (h >>> 0) / 4294967295;
+}
+
 function valueNoise2D(x, z, scale, seed) {
   const fx = x / scale;
   const fz = z / scale;
@@ -42,40 +53,54 @@ export class WorldGenerator {
     this.seed = seed;
   }
 
+  getBaseTerrainHeight(worldX, worldZ) {
+    const base = (valueNoise2D(worldX, worldZ, 92, this.seed + 11) - 0.5) * 7;
+    const hills = (valueNoise2D(worldX, worldZ, 34, this.seed + 47) - 0.5) * 13;
+
+    const mountainMask = clamp((valueNoise2D(worldX, worldZ, 148, this.seed + 83) - 0.42) * 3.1, 0, 1);
+    const mountainShapeA = valueNoise2D(worldX, worldZ, 24, this.seed + 91);
+    const mountainShapeB = valueNoise2D(worldX, worldZ, 12, this.seed + 113);
+    const mountainShape = mountainShapeA * 0.62 + mountainShapeB * 0.38;
+    const mountain = mountainMask * mountainShape * mountainShape * 42;
+    const mountainPlateau = mountainMask * (valueNoise2D(worldX, worldZ, 46, this.seed + 137) - 0.5) * 6;
+
+    return 16 + base + hills + mountain + mountainPlateau;
+  }
+
   getTerrainData(worldX, worldZ) {
-    const base = (valueNoise2D(worldX, worldZ, 92, this.seed + 11) - 0.5) * 8;
-    const hills = (valueNoise2D(worldX, worldZ, 36, this.seed + 47) - 0.5) * 11;
+    const baseTerrain = this.getBaseTerrainHeight(worldX, worldZ);
 
-    const mountainMask = clamp((valueNoise2D(worldX, worldZ, 156, this.seed + 83) - 0.56) * 2.75, 0, 1);
-    const mountainShape = valueNoise2D(worldX, worldZ, 18, this.seed + 91);
-    const mountain = mountainMask * mountainShape * mountainShape * 24;
+    const lakeMacro = valueNoise2D(worldX, worldZ, 86, this.seed + 301);
+    const lakeDetail = valueNoise2D(worldX, worldZ, 24, this.seed + 347);
+    const puddleMacro = valueNoise2D(worldX, worldZ, 20, this.seed + 397);
+    const puddleDetail = valueNoise2D(worldX, worldZ, 9, this.seed + 433);
 
-    const baseTerrain = 16 + base + hills + mountain;
-
-    const lakeMask = valueNoise2D(worldX, worldZ, 118, this.seed + 301);
-    const puddleMask = valueNoise2D(worldX, worldZ, 24, this.seed + 397);
+    const lakeMask = lakeMacro * 0.72 + lakeDetail * 0.28;
+    const puddleMask = puddleMacro * 0.66 + puddleDetail * 0.34;
+    const lakeStrength = clamp((lakeMask - 0.54) / 0.46, 0, 1);
+    const puddleStrength = clamp((puddleMask - 0.7) / 0.3, 0, 1) * (1 - lakeStrength * 0.68);
 
     let basinDepth = 0;
-    let localWaterLevel = WATER_LEVEL;
-    let hasWaterBasin = false;
-
-    if (lakeMask > 0.82) {
-      const t = (lakeMask - 0.82) / 0.18;
-      basinDepth += 3 + t * 8;
-      localWaterLevel = WATER_LEVEL + t * 1.8;
-      hasWaterBasin = true;
+    if (lakeStrength > 0) {
+      basinDepth += 2.6 + lakeStrength * 7.6;
+    }
+    if (puddleStrength > 0) {
+      basinDepth += 0.7 + puddleStrength * 2.1;
     }
 
-    if (puddleMask > 0.97) {
-      const t = (puddleMask - 0.97) / 0.03;
-      basinDepth += 0.8 + t * 1.8;
-      localWaterLevel = Math.max(localWaterLevel, WATER_LEVEL - 1 + t * 1.2);
-      hasWaterBasin = true;
-    }
-
-    let rawHeight = baseTerrain - basinDepth;
+    const rawHeight = baseTerrain - basinDepth;
     const surfaceY = clamp(Math.floor(rawHeight), 2, CHUNK_SIZE_Y - 6);
-    localWaterLevel = clamp(Math.floor(localWaterLevel), WATER_LEVEL - 1, WATER_LEVEL + 2);
+    // Clamp water under estimated local rim so lake surface never pops above surrounding terrain.
+    const rimNeighborMin = Math.min(
+      baseTerrain,
+      this.getBaseTerrainHeight(worldX + 1, worldZ),
+      this.getBaseTerrainHeight(worldX - 1, worldZ),
+      this.getBaseTerrainHeight(worldX, worldZ + 1),
+      this.getBaseTerrainHeight(worldX, worldZ - 1)
+    );
+    const basinRimLevel = Math.floor(rimNeighborMin) - 1;
+    const localWaterLevel = clamp(Math.min(WATER_LEVEL - 1, basinRimLevel), 1, CHUNK_SIZE_Y - 2);
+    const hasWaterBasin = basinDepth > 0.85 && surfaceY + 1 <= localWaterLevel;
 
     const moisture = valueNoise2D(worldX, worldZ, 52, this.seed + 514);
     const temperature = valueNoise2D(worldX, worldZ, 180, this.seed + 637);
@@ -129,6 +154,7 @@ export class WorldGenerator {
         ) {
           this.placeTree(chunk, lx, lz, terrain.surfaceY, wx, wz);
         }
+
       }
     }
   }
@@ -178,22 +204,43 @@ export class WorldGenerator {
         blockId = topBlock;
       } else if (y >= surfaceY - 2) {
         blockId = midBlock;
+      } else {
+        blockId = this.getUndergroundBlock(wx, y, wz, deepBlock);
       }
       chunk.set(lx, y, lz, blockId);
     }
 
-    // Water is limited to real carved basins and very deep lowlands only.
-    const hasStableBasin = hasWaterBasin && basinDepth > 1.05 && surfaceY + 1 <= localWaterLevel;
-    const deepLowland = surfaceY <= WATER_LEVEL - 3;
-    const shouldFillWater = hasStableBasin || deepLowland;
+    // Fill only carved basins. This prevents floating water shelves above nearby ground.
+    const shouldFillWater = hasWaterBasin && basinDepth > 0.85 && surfaceY < localWaterLevel;
 
-    if (shouldFillWater && surfaceY < localWaterLevel) {
-      for (let y = surfaceY + 1; y <= localWaterLevel; y += 1) {
+    if (shouldFillWater) {
+      const fillTo = localWaterLevel;
+      for (let y = surfaceY + 1; y <= fillTo; y += 1) {
         if (chunk.get(lx, y, lz) === BLOCK.AIR) {
           chunk.set(lx, y, lz, BLOCK.WATER);
         }
       }
     }
+  }
+
+  getUndergroundBlock(wx, y, wz, fallbackBlock) {
+    if (y <= 2) {
+      return fallbackBlock;
+    }
+    const oreRoll = hash3D(wx, y, wz, this.seed + 1201);
+    if (y <= 13 && oreRoll > 0.992) {
+      return BLOCK.DIAMOND_ORE;
+    }
+    if (y <= 17 && oreRoll > 0.989) {
+      return BLOCK.GOLD_ORE;
+    }
+    if (y <= 24 && oreRoll > 0.984) {
+      return BLOCK.IRON_ORE;
+    }
+    if (y <= 34 && oreRoll > 0.976) {
+      return BLOCK.COAL_ORE;
+    }
+    return fallbackBlock;
   }
 
   shouldPlaceTree(wx, wz, surfaceY, localWaterLevel, hasWaterBasin, temperature, lx, lz) {

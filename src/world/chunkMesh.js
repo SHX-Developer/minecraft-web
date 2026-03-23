@@ -187,6 +187,50 @@ function pushCuboid(buffers, min, max, uv) {
   }
 }
 
+function pushQuad(buffers, a, b, c, d, normal, uv) {
+  const baseIndex = buffers.vertexCount;
+
+  buffers.positions.push(a[0], a[1], a[2], b[0], b[1], b[2], c[0], c[1], c[2], d[0], d[1], d[2]);
+  for (let i = 0; i < 4; i += 1) {
+    buffers.normals.push(normal[0], normal[1], normal[2]);
+  }
+  buffers.uvs.push(uv.u1, uv.v0, uv.u1, uv.v1, uv.u0, uv.v1, uv.u0, uv.v0);
+  buffers.indices.push(
+    baseIndex,
+    baseIndex + 1,
+    baseIndex + 2,
+    baseIndex,
+    baseIndex + 2,
+    baseIndex + 3
+  );
+  buffers.vertexCount += 4;
+}
+
+function pushCross(buffers, lx, y, lz, uv) {
+  const y0 = y;
+  const y1 = y + 0.94;
+  const x0 = lx + 0.18;
+  const x1 = lx + 0.82;
+  const z0 = lz + 0.18;
+  const z1 = lz + 0.82;
+
+  // Diagonal plane 1 (both sides)
+  const p1a = [x0, y0, z0];
+  const p1b = [x1, y0, z1];
+  const p1c = [x1, y1, z1];
+  const p1d = [x0, y1, z0];
+  pushQuad(buffers, p1a, p1b, p1c, p1d, [0.707, 0, -0.707], uv);
+  pushQuad(buffers, p1b, p1a, p1d, p1c, [-0.707, 0, 0.707], uv);
+
+  // Diagonal plane 2 (both sides)
+  const p2a = [x0, y0, z1];
+  const p2b = [x1, y0, z0];
+  const p2c = [x1, y1, z0];
+  const p2d = [x0, y1, z1];
+  pushQuad(buffers, p2a, p2b, p2c, p2d, [0.707, 0, 0.707], uv);
+  pushQuad(buffers, p2b, p2a, p2d, p2c, [-0.707, 0, -0.707], uv);
+}
+
 function pushTorch(buffers, lx, y, lz, blockId) {
   const parts = getTorchParts(blockId);
   for (let i = 0; i < parts.length; i += 1) {
@@ -218,6 +262,7 @@ function toGeometry(buffers) {
 export function buildChunkMeshes(chunk, world) {
   const opaqueBuffers = createBuffers();
   const transparentBuffers = createBuffers();
+  const emissiveBuffers = createBuffers();
 
   const chunkWorldX = chunk.cx * CHUNK_SIZE_X;
   const chunkWorldZ = chunk.cz * CHUNK_SIZE_Z;
@@ -236,9 +281,20 @@ export function buildChunkMeshes(chunk, world) {
         }
 
         const buffers = blockType.transparent ? transparentBuffers : opaqueBuffers;
+        const glowBuffers = blockId === BLOCK.GLOW_BLOCK ? emissiveBuffers : null;
 
-        if (isTorchBlock(blockId) || !isBlockCube(blockId)) {
+        if (blockType.shape === "cross") {
+          const tile = getFaceTile(blockId, "front");
+          pushCross(transparentBuffers, lx, y, lz, getAtlasUV(tile));
+          continue;
+        }
+
+        if (isTorchBlock(blockId) || blockType.shape === "torch") {
           pushTorch(opaqueBuffers, lx, y, lz, blockId);
+          continue;
+        }
+
+        if (!isBlockCube(blockId)) {
           continue;
         }
 
@@ -254,6 +310,9 @@ export function buildChunkMeshes(chunk, world) {
           const tile = getFaceTile(blockId, face.name);
           const uv = getAtlasUV(tile);
           pushFace(buffers, lx, y, lz, face, uv);
+          if (glowBuffers) {
+            pushFace(glowBuffers, lx, y, lz, face, uv);
+          }
         }
       }
     }
@@ -262,5 +321,6 @@ export function buildChunkMeshes(chunk, world) {
   return {
     opaqueGeometry: toGeometry(opaqueBuffers),
     transparentGeometry: toGeometry(transparentBuffers),
+    emissiveGeometry: toGeometry(emissiveBuffers),
   };
 }
