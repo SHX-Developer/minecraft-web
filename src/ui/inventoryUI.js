@@ -28,12 +28,14 @@ export class InventoryUI {
     this.model = new InventoryModel();
     this.previewCache = new ItemPreviewCache(128, atlasTexture);
     this.cursorItem = null;
+    this.cursorCount = 0;
     this.isOpenState = false;
     this.changeListeners = new Set();
     this.slotBindings = [];
     this.mouseX = 0;
     this.mouseY = 0;
     this.isCreativePanelOpen = false;
+    this.survivalMode = false;
 
     this.unsubscribeModel = this.model.onChange(() => this.refresh());
     this.onMouseMove = (event) => {
@@ -48,6 +50,7 @@ export class InventoryUI {
         return;
       }
       this.cursorItem = null;
+      this.cursorCount = 0;
       this.refresh();
     };
     this.onCreativeToggleClick = (event) => {
@@ -55,6 +58,18 @@ export class InventoryUI {
       event.stopPropagation();
       this.setCreativePanelOpen(!this.isCreativePanelOpen);
     };
+
+    this.build();
+  }
+
+  setSurvivalMode(survival) {
+    this.survivalMode = survival;
+    this.model.setSurvivalMode(survival);
+
+    const creativeSection = document.getElementById("inventory-creative");
+    if (creativeSection) {
+      creativeSection.style.display = survival ? "none" : "";
+    }
 
     this.build();
   }
@@ -95,8 +110,10 @@ export class InventoryUI {
       this.bindSlot("storage", i, this.storageGridElement, "storage");
     }
 
-    for (let i = 0; i < this.model.creativeSlots.length; i += 1) {
-      this.bindSlot("creative", i, this.creativeGridElement, "creative");
+    if (!this.survivalMode) {
+      for (let i = 0; i < this.model.creativeSlots.length; i += 1) {
+        this.bindSlot("creative", i, this.creativeGridElement, "creative");
+      }
     }
 
     this.setCreativePanelOpen(false);
@@ -124,12 +141,16 @@ export class InventoryUI {
     preview.className = "slot-preview";
     slot.appendChild(preview);
 
+    const countLabel = document.createElement("span");
+    countLabel.className = "slot-count";
+    slot.appendChild(countLabel);
+
     slot.addEventListener("pointerdown", (event) => {
       this.handleSlotPointerDown(kind, index, event);
     });
 
     parent.appendChild(slot);
-    this.slotBindings.push({ kind, index, slot, preview, roleClass });
+    this.slotBindings.push({ kind, index, slot, preview, countLabel, roleClass });
   }
 
   handleSlotPointerDown(kind, index, event) {
@@ -144,30 +165,53 @@ export class InventoryUI {
       const source = this.model.getSlot(kind, index);
       if (source != null) {
         this.cursorItem = source;
+        this.cursorCount = 1;
       }
       this.refresh();
       return;
     }
 
     const source = this.model.getSlot(kind, index);
+    const sourceCount = this.model.getSlotCount(kind, index);
+
     if (this.cursorItem == null) {
       if (source == null) {
         this.refresh();
         return;
       }
       this.cursorItem = source;
-      this.model.setSlot(kind, index, null);
+      this.cursorCount = this.survivalMode ? sourceCount : 1;
+      this.model.setSlotWithCount(kind, index, null, 0);
       return;
     }
 
     if (source == null) {
-      this.model.setSlot(kind, index, this.cursorItem);
+      this.model.setSlotWithCount(kind, index, this.cursorItem, this.survivalMode ? this.cursorCount : 1);
       this.cursorItem = null;
+      this.cursorCount = 0;
       return;
     }
 
-    this.model.setSlot(kind, index, this.cursorItem);
+    if (this.survivalMode && source === this.cursorItem) {
+      const total = sourceCount + this.cursorCount;
+      const maxStack = 64;
+      const inSlot = Math.min(total, maxStack);
+      const remaining = total - inSlot;
+      this.model.setSlotWithCount(kind, index, this.cursorItem, inSlot);
+      if (remaining > 0) {
+        this.cursorCount = remaining;
+      } else {
+        this.cursorItem = null;
+        this.cursorCount = 0;
+      }
+      return;
+    }
+
+    const prevCursorItem = this.cursorItem;
+    const prevCursorCount = this.cursorCount;
     this.cursorItem = source;
+    this.cursorCount = this.survivalMode ? sourceCount : 1;
+    this.model.setSlotWithCount(kind, index, prevCursorItem, this.survivalMode ? prevCursorCount : 1);
   }
 
   refresh() {
@@ -176,14 +220,21 @@ export class InventoryUI {
     for (let i = 0; i < this.slotBindings.length; i += 1) {
       const binding = this.slotBindings[i];
       const id = this.model.getSlot(binding.kind, binding.index);
+      const count = this.model.getSlotCount(binding.kind, binding.index);
       binding.slot.classList.toggle("active", binding.kind === "hotbar" && binding.index === selected);
       binding.slot.classList.toggle("empty", id == null);
       if (id == null) {
         binding.preview.style.backgroundImage = "";
         binding.slot.title = "";
+        binding.countLabel.textContent = "";
       } else {
         binding.preview.style.backgroundImage = `url("${this.previewCache.get(id)}")`;
         binding.slot.title = getBlockDisplayName(id);
+        if (this.survivalMode && binding.kind !== "creative" && count > 1) {
+          binding.countLabel.textContent = String(count);
+        } else {
+          binding.countLabel.textContent = "";
+        }
       }
     }
 
@@ -235,10 +286,17 @@ export class InventoryUI {
     document.body.classList.remove("inventory-open");
     window.removeEventListener("pointermove", this.onMouseMove);
     if (this.cursorItem != null) {
-      if (!this.model.putIntoFirstStorage(this.cursorItem)) {
-        this.model.setSlot("hotbar", this.model.getSelectedHotbarIndex(), this.cursorItem);
+      if (this.survivalMode) {
+        if (!this.model.addItemToInventory(this.cursorItem)) {
+          // Items lost if no space
+        }
+      } else {
+        if (!this.model.putIntoFirstStorage(this.cursorItem)) {
+          this.model.setSlot("hotbar", this.model.getSelectedHotbarIndex(), this.cursorItem);
+        }
       }
       this.cursorItem = null;
+      this.cursorCount = 0;
     }
     this.updateCursor();
   }

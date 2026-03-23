@@ -3,17 +3,22 @@ import { MusicManager } from "../audio/musicManager.js";
 import { SfxManager } from "../audio/sfxManager.js";
 import { ParticlesManager } from "../effects/particlesManager.js";
 import { AnimalManager } from "../entities/animalManager.js";
+import { DroppedItemManager } from "../entities/droppedItemManager.js";
 import { PlayerController } from "../player/playerController.js";
+import { PlayerHealth } from "../player/playerHealth.js";
 import { raycastBlock } from "../player/raycast.js";
+import { BlockBreakSystem } from "../systems/blockBreakSystem.js";
 import { CloudSystem } from "../systems/cloudSystem.js";
 import { DayNightCycle } from "../systems/dayNightCycle.js";
+import { FallDamageSystem } from "../systems/fallDamageSystem.js";
 import { SprintFovSystem } from "../systems/sprintFovSystem.js";
 import { TorchLightSystem } from "../systems/torchLightSystem.js";
 import { WaterSystem } from "../systems/waterSystem.js";
+import { DeathScreen } from "../ui/deathScreen.js";
+import { HeartsUI } from "../ui/heartsUI.js";
 import { HeldItemRenderer } from "../ui/heldItemRenderer.js";
 import { InventoryUI } from "../ui/inventoryUI.js";
 import {
-  ACTION_REPEAT_INTERVAL,
   MAX_DELTA_TIME,
   MAX_RAY_DISTANCE,
   SFX_BREAK_VOLUME,
@@ -31,6 +36,7 @@ import {
 } from "../world/blockTypes.js";
 import { World } from "../world/world.js";
 import { createCamera } from "./camera.js";
+import { GameModeManager } from "./gameMode.js";
 import { InputManager } from "./input.js";
 import { createRenderer, resizeRenderer } from "./renderer.js";
 
@@ -69,6 +75,7 @@ export class Game {
     inventoryCursor,
     heldItemCanvas,
     atlasUrl,
+    hudElement,
   }) {
     this.canvas = canvas;
     this.hudHotbarRoot = hudHotbarRoot;
@@ -84,13 +91,16 @@ export class Game {
     this.inventoryCursor = inventoryCursor;
     this.heldItemCanvas = heldItemCanvas;
     this.atlasUrl = atlasUrl;
+    this.hudElement = hudElement;
 
+    this.gameModeManager = new GameModeManager();
     this.renderer = null;
     this.scene = null;
     this.camera = null;
     this.input = null;
     this.world = null;
     this.playerController = null;
+    this.playerHealth = null;
     this.inventoryUI = null;
     this.selectionMesh = null;
     this.currentTarget = null;
@@ -104,20 +114,27 @@ export class Game {
     this.sfxManager = null;
     this.particlesManager = null;
     this.animalManager = null;
+    this.droppedItemManager = null;
+    this.blockBreakSystem = null;
+    this.fallDamageSystem = null;
+    this.heartsUI = null;
+    this.deathScreen = null;
+    this.damageOverlay = null;
 
     this.ready = false;
     this.running = false;
+    this.dead = false;
     this.clock = new THREE.Clock();
     this.tmpRayOrigin = new THREE.Vector3();
     this.tmpRayDirection = new THREE.Vector3();
     this.fps = 0;
     this.fpsTimer = 0;
     this.fpsFrames = 0;
-    this.breakCooldown = 0;
-    this.placeCooldown = 0;
     this.onResize = () => resizeRenderer(this.renderer, this.camera);
     this.onUserGesture = null;
     this.onInventoryKeyDown = null;
+
+    this.atlasTexture = null;
   }
 
   async init() {
@@ -127,10 +144,14 @@ export class Game {
     this.camera = createCamera();
     this.input = new InputManager(this.canvas);
 
-    const atlasTexture = await loadAtlasTexture(this.atlasUrl);
-    atlasTexture.anisotropy = Math.min(4, this.renderer.capabilities.getMaxAnisotropy());
-    this.world = new World(this.scene, atlasTexture);
+    this.atlasTexture = await loadAtlasTexture(this.atlasUrl);
+    this.atlasTexture.anisotropy = Math.min(4, this.renderer.capabilities.getMaxAnisotropy());
+    this.world = new World(this.scene, this.atlasTexture);
     this.playerController = new PlayerController(this.camera, this.scene, this.world, this.input);
+    this.playerController.setGameModeManager(this.gameModeManager);
+
+    this.playerHealth = new PlayerHealth(10);
+
     this.inventoryUI = new InventoryUI({
       hudHotbarRoot: this.hudHotbarRoot,
       overlayElement: this.inventoryOverlay,
@@ -141,7 +162,7 @@ export class Game {
       inventoryHotbarElement: this.inventoryHotbar,
       trashElement: this.inventoryTrash,
       cursorElement: this.inventoryCursor,
-      atlasTexture,
+      atlasTexture: this.atlasTexture,
     });
 
     this.dayNightCycle = new DayNightCycle(this.scene);
@@ -150,7 +171,7 @@ export class Game {
     this.particlesManager = new ParticlesManager(this.scene);
     this.animalManager = new AnimalManager(this.scene, this.world, this.particlesManager);
     this.torchLightSystem = new TorchLightSystem(this.scene, this.world);
-    this.heldItemRenderer = new HeldItemRenderer(this.heldItemCanvas, atlasTexture);
+    this.heldItemRenderer = new HeldItemRenderer(this.heldItemCanvas, this.atlasTexture);
     this.musicManager = new MusicManager({
       tracks: MUSIC_TRACKS,
       volume: MUSIC_VOLUME,
@@ -159,6 +180,23 @@ export class Game {
       masterVolume: SFX_MASTER_VOLUME,
       breakVolume: SFX_BREAK_VOLUME,
       footstepVolume: SFX_FOOTSTEP_VOLUME,
+    });
+
+    this.droppedItemManager = new DroppedItemManager(this.scene, this.world, this.atlasTexture);
+    this.blockBreakSystem = new BlockBreakSystem(this.scene);
+    this.fallDamageSystem = new FallDamageSystem(this.playerController, this.playerHealth, this.gameModeManager);
+
+    this.heartsUI = new HeartsUI(this.hudElement);
+    this.deathScreen = new DeathScreen(this.hudElement);
+
+    this.damageOverlay = document.getElementById("damage-overlay");
+
+    this.playerHealth.onChange((hp, max) => {
+      this.heartsUI.updateHealth(hp, max);
+    });
+
+    this.playerHealth.onDeath(() => {
+      this.handleDeath();
     });
 
     const spawn = this.world.getSpawnPoint();
@@ -197,6 +235,25 @@ export class Game {
     this.ready = true;
   }
 
+  applyGameMode(mode) {
+    this.gameModeManager.setMode(mode);
+
+    const isSurvival = this.gameModeManager.isSurvival();
+
+    this.inventoryUI.setSurvivalMode(isSurvival);
+    this.heartsUI.setVisible(isSurvival);
+    this.heartsUI.updateHealth(this.playerHealth.getHealth(), this.playerHealth.getMaxHealth());
+
+    if (isSurvival) {
+      this.playerController.player.isFlying = false;
+    }
+
+    const inventoryHeader = document.getElementById("inventory-header");
+    if (inventoryHeader) {
+      inventoryHeader.querySelector("span").textContent = isSurvival ? "Inventory" : "Creative Inventory";
+    }
+  }
+
   setupAudioUnlock() {
     this.onUserGesture = () => {
       this.musicManager.startFromUserGesture();
@@ -228,6 +285,10 @@ export class Game {
   }
 
   update(delta) {
+    if (this.dead) {
+      return;
+    }
+
     this.handleHotbarSelection();
 
     const controlsEnabled = this.input.locked && !this.inventoryUI.isOpen();
@@ -245,6 +306,19 @@ export class Game {
     this.animalManager.update(delta, playerPosition);
     this.particlesManager.update(delta);
 
+    this.playerHealth.update(delta);
+    this.fallDamageSystem.update();
+
+    if (this.gameModeManager.isSurvival()) {
+      this.droppedItemManager.update(delta, playerPosition, (blockId) => {
+        return this.inventoryUI.model.addItemToInventory(blockId);
+      });
+    }
+
+    if (this.damageOverlay) {
+      this.damageOverlay.style.opacity = this.playerHealth.isDamageFlashing() ? "0.35" : "0";
+    }
+
     this.heldItemRenderer.setVisible(!this.inventoryUI.isOpen());
     this.heldItemRenderer.update(
       delta,
@@ -256,8 +330,7 @@ export class Game {
       this.handleBlockActions(delta);
     } else {
       this.selectionMesh.visible = false;
-      this.breakCooldown = 0;
-      this.placeCooldown = 0;
+      this.blockBreakSystem.cancelBreaking();
     }
 
     this.sfxManager.updateFootsteps(delta, {
@@ -268,7 +341,9 @@ export class Game {
   }
 
   toggleInventoryFromKey() {
-    // Prevent stale key press from being consumed in later update frames.
+    if (this.dead) {
+      return;
+    }
     this.input.consumeKeyPress("KeyE");
     const opened = this.inventoryUI.toggle();
     if (opened && document.pointerLockElement) {
@@ -324,27 +399,17 @@ export class Game {
 
   handleBlockActions(delta) {
     if (this.input.isMouseDown(0)) {
-      this.breakCooldown -= delta;
-      if (this.breakCooldown <= 0) {
-        this.performBreakAction();
-        this.breakCooldown = ACTION_REPEAT_INTERVAL;
-      }
+      this.handleBreakAction(delta);
     } else {
-      this.breakCooldown = 0;
+      this.blockBreakSystem.cancelBreaking();
     }
 
-    if (this.input.isMouseDown(2)) {
-      this.placeCooldown -= delta;
-      if (this.placeCooldown <= 0) {
-        this.performPlaceAction();
-        this.placeCooldown = ACTION_REPEAT_INTERVAL;
-      }
-    } else {
-      this.placeCooldown = 0;
+    if (this.input.consumeMouseButton(2)) {
+      this.performPlaceAction();
     }
   }
 
-  performBreakAction() {
+  handleBreakAction(delta) {
     const blockDistance = this.currentTarget ? this.currentTarget.distance : MAX_RAY_DISTANCE;
     const hitAnimal = this.animalManager.tryHitFromRay(
       this.tmpRayOrigin,
@@ -355,33 +420,52 @@ export class Game {
     );
     if (hitAnimal) {
       this.sfxManager.playBlockBreak();
+      this.blockBreakSystem.cancelBreaking();
       return;
     }
 
     if (!this.currentTarget) {
+      this.blockBreakSystem.cancelBreaking();
       return;
     }
 
     const target = this.currentTarget.position;
     const targetId = this.world.getBlock(target.x, target.y, target.z);
     if (!isBlockBreakable(targetId)) {
+      this.blockBreakSystem.cancelBreaking();
       return;
     }
 
-    const broken = this.world.setBlock(target.x, target.y, target.z, BLOCK.AIR);
+    const instantBreak = this.gameModeManager.instantBreak();
+
+    if (!this.blockBreakSystem.isSameTarget(target.x, target.y, target.z)) {
+      const readyNow = this.blockBreakSystem.startBreaking(target.x, target.y, target.z, targetId, instantBreak);
+      if (readyNow) {
+        this.breakBlock(target.x, target.y, target.z, targetId);
+      }
+      return;
+    }
+
+    const broken = this.blockBreakSystem.continueBreaking(delta);
+    if (broken) {
+      this.breakBlock(target.x, target.y, target.z, targetId);
+    }
+  }
+
+  breakBlock(x, y, z, blockId) {
+    const broken = this.world.setBlock(x, y, z, BLOCK.AIR);
     if (!broken) {
       return;
     }
 
-    this.torchLightSystem.onBlockChanged(target.x, target.y, target.z, targetId, BLOCK.AIR);
-    this.cleanupUnsupportedTorchesAround(target.x, target.y, target.z);
-    this.particlesManager.spawnBlockBreak(
-      target.x,
-      target.y,
-      target.z,
-      getHotbarColor(targetId)
-    );
+    this.torchLightSystem.onBlockChanged(x, y, z, blockId, BLOCK.AIR);
+    this.cleanupUnsupportedTorchesAround(x, y, z);
+    this.particlesManager.spawnBlockBreak(x, y, z, getHotbarColor(blockId));
     this.sfxManager.playBlockBreak();
+
+    if (this.gameModeManager.hasItemDrop()) {
+      this.droppedItemManager.spawnItem(blockId, x, y, z);
+    }
   }
 
   performPlaceAction() {
@@ -412,6 +496,12 @@ export class Game {
       return;
     }
 
+    if (this.gameModeManager.consumesBlocks()) {
+      if (!this.inventoryUI.model.consumeSelectedBlock()) {
+        return;
+      }
+    }
+
     const previous = this.world.getBlock(placeX, placeY, placeZ);
     const changed = this.world.setBlock(placeX, placeY, placeZ, placeBlockId);
     if (!changed) {
@@ -423,6 +513,33 @@ export class Game {
 
   resolvePlaceBlockId(selectedBlockId, normal, placeX, placeY, placeZ) {
     return selectedBlockId;
+  }
+
+  async handleDeath() {
+    this.dead = true;
+
+    if (this.inventoryUI.isOpen()) {
+      this.inventoryUI.close();
+    }
+
+    if (this.gameModeManager.isSurvival()) {
+      this.inventoryUI.model.clearAll();
+      this.droppedItemManager.clear();
+    }
+
+    await this.deathScreen.show();
+
+    this.playerHealth.reset();
+
+    const spawn = this.world.getSpawnPoint();
+    this.world.forceLoadSyncAround(spawn.x, spawn.z, 2);
+    this.playerController.setPosition(spawn.x, spawn.y, spawn.z);
+    this.playerController.player.velocity.set(0, 0, 0);
+    this.playerController.player.isFlying = false;
+    this.playerController.player.isSprinting = false;
+    this.playerController.player.isCrouching = false;
+
+    this.dead = false;
   }
 
   cleanupUnsupportedTorchesAround(worldX, worldY, worldZ) {
@@ -504,8 +621,11 @@ export class Game {
     const visibleChunks = this.world.getVisibleChunkCount(this.camera);
     const queues = this.world.getQueueSizes();
 
-    const text = [
+    const modeLabel = this.gameModeManager.getMode() || "none";
+
+    const lines = [
       `FPS: ${this.fps.toFixed(0)}`,
+      `Mode: ${modeLabel.toUpperCase()}`,
       `XYZ: ${pos.x.toFixed(2)} ${pos.y.toFixed(2)} ${pos.z.toFixed(2)}`,
       `Chunk: ${chunk.cx}, ${chunk.cz}`,
       `Active chunks: ${this.world.getActiveChunkCount()}`,
@@ -514,11 +634,18 @@ export class Game {
       `Block: ${this.inventoryUI.getSelectedBlockName()}`,
       `Animals: ${this.animalManager.getCount()}`,
       `State: ${this.playerController.getMovementMode()}`,
-      `Inventory: ${this.inventoryUI.isOpen() ? "open" : "closed"}`,
-      `Day/Night cycle: ${((this.dayNightCycle.time / this.dayNightCycle.cycleDuration) * 100).toFixed(0)}%`,
-    ].join("\n");
+    ];
 
-    this.debugRoot.textContent = text;
+    if (this.gameModeManager.isSurvival()) {
+      lines.push(`HP: ${this.playerHealth.getHealth()}/${this.playerHealth.getMaxHealth()}`);
+      lines.push(`Drops: ${this.droppedItemManager.getCount()}`);
+    }
+
+    lines.push(
+      `Day/Night cycle: ${((this.dayNightCycle.time / this.dayNightCycle.cycleDuration) * 100).toFixed(0)}%`
+    );
+
+    this.debugRoot.textContent = lines.join("\n");
   }
 
   destroy() {
@@ -554,6 +681,18 @@ export class Game {
     }
     if (this.torchLightSystem) {
       this.torchLightSystem.destroy();
+    }
+    if (this.droppedItemManager) {
+      this.droppedItemManager.destroy();
+    }
+    if (this.blockBreakSystem) {
+      this.blockBreakSystem.destroy();
+    }
+    if (this.heartsUI) {
+      this.heartsUI.destroy();
+    }
+    if (this.deathScreen) {
+      this.deathScreen.destroy();
     }
   }
 }

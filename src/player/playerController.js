@@ -46,6 +46,11 @@ export class PlayerController {
     this.lastForwardTapTime = -Infinity;
     this.lastSpaceTapTime = -Infinity;
     this.movementMode = "walk";
+    this.gameModeManager = null;
+  }
+
+  setGameModeManager(gameModeManager) {
+    this.gameModeManager = gameModeManager;
   }
 
   setPosition(x, y, z) {
@@ -142,6 +147,9 @@ export class PlayerController {
 
   handleFlightToggle(spacePressed) {
     if (!spacePressed) {
+      return;
+    }
+    if (this.gameModeManager && !this.gameModeManager.canFly()) {
       return;
     }
     const now = performance.now() * 0.001;
